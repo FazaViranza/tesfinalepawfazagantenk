@@ -18,28 +18,28 @@ const {
 router.get(
   '/prediction',
   authenticate,
-  authorize('admin'),
+  authorize('owner'),
   getPrediction
 );
 
 router.get(
   '/recommendations',
   authenticate,
-  authorize('admin'),
+  authorize('owner'),
   getRecommendations
 );
 
 router.get(
   '/insights',
   authenticate,
-  authorize('admin'),
+  authorize('owner'),
   getBusinessInsights
 );
 
 router.get(
   '/insights/saved',
   authenticate,
-  authorize('admin'),
+  authorize('owner'),
   getSavedInsights
 );
 
@@ -47,7 +47,7 @@ router.get(
 router.post(
   '/cross-sell',
   authenticate,
-  authorize(['admin', 'cashier']),
+  authorize(['owner', 'cashier']),
   getCrossSell
 );
 

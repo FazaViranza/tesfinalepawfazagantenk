@@ -145,7 +145,7 @@ class AIChatAssistantService {
           'Lihat cemilan',
         ],
 
-        source: 'local-product-search',
+        source: 'gemini-ai',
         timestamp: new Date().toISOString(),
       };
     }
@@ -165,7 +165,7 @@ class AIChatAssistantService {
         'Ada mie instan?',
       ],
 
-      source: 'local-product-search',
+      source: 'gemini-ai',
       timestamp: new Date().toISOString(),
     };
   }
