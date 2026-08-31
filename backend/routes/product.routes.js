@@ -6,8 +6,8 @@ router.use(authenticate);
 
 router.get('/', getAll);
 router.get('/:id', getById);
-router.post('/', authorize('admin'), create);
-router.put('/:id', authorize('admin'), update);
-router.delete('/:id', authorize('admin'), remove);
+router.post('/', authorize('owner'), create);
+router.put('/:id', authorize('owner'), update);
+router.delete('/:id', authorize('owner'), remove);
 
 module.exports = router;

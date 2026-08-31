@@ -108,15 +108,26 @@ class AIPredictionService {
         p.price,
         p.cost_price,
         c.name as category_name,
-        COALESCE(SUM(td.quantity), 0) as units_sold_30d,
-        COALESCE(COUNT(DISTINCT t.id), 0) as transaction_count
+        COALESCE(SUM(
+          CASE
+            WHEN t.id IS NOT NULL THEN td.quantity
+            ELSE 0
+          END
+        ), 0) as units_sold_30d,
+        COUNT(DISTINCT t.id) as transaction_count
       FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      LEFT JOIN transaction_details td ON p.id = td.product_id
-      LEFT JOIN transactions t ON td.transaction_id = t.id AND t.created_at >= NOW() - INTERVAL '30 days' AND t.status = 'completed'
+      LEFT JOIN categories c
+        ON p.category_id = c.id
+      LEFT JOIN transaction_details td
+        ON p.id = td.product_id
+      LEFT JOIN transactions t
+        ON td.transaction_id = t.id
+        AND t.created_at >= NOW() - INTERVAL '30 days'
+        AND t.status = 'completed'
       GROUP BY p.id, c.name
       ORDER BY units_sold_30d DESC;
     `;
+
     const productSalesRes = await query(productSalesSql);
 
     const productForecasts = productSalesRes.rows.map(prod => {

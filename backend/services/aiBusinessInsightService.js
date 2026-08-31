@@ -49,12 +49,33 @@ class AIBusinessInsightService {
       SELECT 
         c.name as category_name,
         c.icon,
-        COALESCE(SUM(td.subtotal), 0) as revenue,
-        COALESCE(SUM(td.quantity), 0) as units_sold
+        COALESCE(
+          SUM(
+            CASE
+              WHEN t.id IS NOT NULL THEN td.subtotal
+              ELSE 0
+            END
+          ),
+          0
+        ) as revenue,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN t.id IS NOT NULL THEN td.quantity
+              ELSE 0
+            END
+          ),
+          0
+        ) as units_sold
       FROM categories c
-      JOIN products p ON c.id = p.category_id
-      LEFT JOIN transaction_details td ON p.id = td.product_id
-      LEFT JOIN transactions t ON td.transaction_id = t.id AND t.status = 'completed' AND t.created_at >= NOW() - INTERVAL '30 days'
+      JOIN products p
+        ON c.id = p.category_id
+      LEFT JOIN transaction_details td
+        ON p.id = td.product_id
+      LEFT JOIN transactions t
+        ON td.transaction_id = t.id
+        AND t.status = 'completed'
+        AND t.created_at >= NOW() - INTERVAL '30 days'
       GROUP BY c.id, c.name, c.icon
       ORDER BY revenue DESC;
     `;
@@ -76,13 +97,33 @@ class AIBusinessInsightService {
         p.price,
         p.cost_price,
         (p.stock * p.cost_price) as tied_up_capital,
-        COALESCE(SUM(td.quantity), 0) as sold_30d
+        COALESCE(
+          SUM(
+            CASE
+              WHEN t.id IS NOT NULL THEN td.quantity
+              ELSE 0
+            END
+          ),
+          0
+        ) as sold_30d
       FROM products p
-      LEFT JOIN transaction_details td ON p.id = td.product_id
-      LEFT JOIN transactions t ON td.transaction_id = t.id AND t.created_at >= NOW() - INTERVAL '30 days' AND t.status = 'completed'
+      LEFT JOIN transaction_details td
+        ON p.id = td.product_id
+      LEFT JOIN transactions t
+        ON td.transaction_id = t.id
+        AND t.created_at >= NOW() - INTERVAL '30 days'
+        AND t.status = 'completed'
       WHERE p.stock > 0
       GROUP BY p.id
-      HAVING COALESCE(SUM(td.quantity), 0) <= 2
+      HAVING COALESCE(
+        SUM(
+          CASE
+            WHEN t.id IS NOT NULL THEN td.quantity
+            ELSE 0
+          END
+        ),
+        0
+      ) <= 2
       ORDER BY tied_up_capital DESC;
     `;
     const deadstockRes = await query(deadstockSql);
@@ -112,7 +153,7 @@ class AIBusinessInsightService {
       actionableTips.push({
         category: 'Profitabilitas',
         title: 'Evaluasi Efisiensi Biaya Bahan Baku (HPP)',
-        detail: `Margin laba kotor saat ini ${grossMarginPct}%. Pertimbangkan negosiasi supplier atau substitusi bahan untuk mencapai target margin 50%+.`,
+        detail: `Margin laba kotor saat ini ${grossMarginPct}%. Pertimbangkan evaluasi harga beli dan biaya operasional untuk mencapai target margin yang lebih sehat.`,
         impact: 'Tinggi',
       });
     }
@@ -131,14 +172,14 @@ class AIBusinessInsightService {
       actionableTips.push({
         category: 'Peluang Ekspansi',
         title: 'Tren Pertumbuhan Positif (+ ' + growthPct + '%)',
-        detail: 'Performa penjualan meningkat konsisten. Waktu yang tepat untuk menambah varian menu baru atau membuka jam operasional lebih awal.',
+        detail: 'Performa penjualan meningkat konsisten. Pertimbangkan menambah variasi produk yang relevan dengan kebutuhan pelanggan dan memastikan stok produk terlaris tetap tersedia.',
         impact: 'Tinggi',
       });
     } else {
       actionableTips.push({
         category: 'Pemasaran & Retensi',
         title: 'Tingkatkan Nilai Rata-rata Transaksi (AOV)',
-        detail: `Rata-rata belanja pelanggan saat ini Rp ${avgOrderValue.toLocaleString('id-ID')}. Terapkan promo 'Tambah Rp 5.000 dapat Pastry' pada sistem kasir POS.`,
+        detail: `Rata-rata belanja pelanggan saat ini Rp ${avgOrderValue.toLocaleString('id-ID')}. Terapkan promo bundling produk seperti minuman dan cemilan untuk meningkatkan nilai transaksi pada sistem kasir POS.`,
         impact: 'Tinggi',
       });
     }

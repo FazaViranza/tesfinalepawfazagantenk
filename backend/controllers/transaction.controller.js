@@ -112,8 +112,34 @@ const create = async (req, res, next) => {
     }
 
     const disc = parseFloat(discount_amount) || 0;
+
+    if (disc < 0 || disc > totalAmount) {
+      await client.query('ROLLBACK');
+      client.release();
+
+      return res.status(400).json({
+        success: false,
+        message: 'Nominal diskon tidak valid.',
+      });
+    }
+
     const finalAmount = totalAmount - disc;
-    const paid = parseFloat(paid_amount) || finalAmount;
+
+    const paid =
+      paid_amount === undefined || paid_amount === null
+        ? finalAmount
+        : parseFloat(paid_amount);
+
+    if (Number.isNaN(paid) || paid < finalAmount) {
+      await client.query('ROLLBACK');
+      client.release();
+
+      return res.status(400).json({
+        success: false,
+        message: 'Nominal pembayaran tidak mencukupi.',
+      });
+    }
+
     const change = paid - finalAmount;
 
     // Generate invoice number
