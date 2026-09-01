@@ -189,6 +189,7 @@ const create = async (req, res, next) => {
       'cash',
       'qris',
       'transfer',
+      'debit',
     ];
 
     if (!allowedPaymentMethods.includes(payment_method)) {

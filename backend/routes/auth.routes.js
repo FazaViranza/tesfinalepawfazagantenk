@@ -1,16 +1,20 @@
 const router = require('express').Router();
 
-const { getDashboardStats } = require('../controllers/dashboard.controller');
+const {
+  register,
+  login,
+  getMe,
+} = require('../controllers/auth.controller');
+
 const {
   authenticate,
-  authorize,
 } = require('../middleware/auth.middleware');
 
-router.get(
-  '/',
-  authenticate,
-  authorize('owner'),
-  getDashboardStats
-);
+// Public
+router.post('/register', register);
+router.post('/login', login);
+
+// Protected
+router.get('/me', authenticate, getMe);
 
 module.exports = router;
