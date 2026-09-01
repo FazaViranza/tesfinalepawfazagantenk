@@ -92,7 +92,7 @@ export default function AIInsights() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-1">
               <p className="text-xs text-gray-400 font-medium uppercase">Gross Margin Rata-rata</p>
-              <p className="text-2xl font-bold text-white">{data.metrics?.grossMarginPct || 0}%</p>
+              <p className="text-2xl font-bold text-white">{data.financials?.grossMarginPct || 0}%</p>
               <p className="text-xs text-emerald-400 flex items-center gap-1">
                 <TrendingUp className="w-3.5 h-3.5" /> Margin kotor penjualan
               </p>
@@ -100,13 +100,13 @@ export default function AIInsights() {
 
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-1">
               <p className="text-xs text-gray-400 font-medium uppercase">Total Omset 30 Hari</p>
-              <p className="text-2xl font-bold text-indigo-300">{formatRp(data.metrics?.revenue30d)}</p>
-              <p className="text-xs text-gray-400">{data.metrics?.orderCount30d || 0} total transaksi</p>
+              <p className="text-2xl font-bold text-indigo-300">{formatRp(data.financials?.totalRevenue)}</p>
+              <p className="text-xs text-gray-400">{data.financials?.orderCount30d || 0} total transaksi</p>
             </div>
 
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-1">
               <p className="text-xs text-gray-400 font-medium uppercase">Total Laba Kotor</p>
-              <p className="text-2xl font-bold text-emerald-400">{formatRp(data.metrics?.grossProfit30d)}</p>
+              <p className="text-2xl font-bold text-emerald-400">{formatRp(data.financials?.grossProfit30d)}</p>
               <p className="text-xs text-gray-400">Estimasi profit bersih kotor</p>
             </div>
 
@@ -126,15 +126,15 @@ export default function AIInsights() {
                 <h3 className="text-base font-bold text-white">Rekomendasi Strategis AI</h3>
               </div>
               <div className="space-y-3">
-                {data.actionTips && data.actionTips.length > 0 ? (
-                  data.actionTips.map((tip, idx) => (
+                {data.actionableTips && data.actionableTips.length > 0 ? (
+                  data.actionableTips.map((tip, idx) => (
                     <div key={idx} className="flex items-start gap-3 bg-gray-800/50 border border-gray-700/60 rounded-xl p-3.5">
                       <div className="w-6 h-6 rounded-lg bg-indigo-900/60 text-indigo-300 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
                         {idx + 1}
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-white">{tip.title}</p>
-                        <p className="text-xs text-gray-300 mt-1 leading-relaxed">{tip.description}</p>
+                        <p className="text-xs text-gray-300 mt-1 leading-relaxed">{tip.detail}</p>
                         {tip.impact && (
                           <span className="inline-block mt-2 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-md">
                             🎯 Potensi Dampak: {tip.impact}
@@ -174,7 +174,7 @@ export default function AIInsights() {
                         />
                         <div>
                           <p className="text-sm font-semibold text-white">{p.name}</p>
-                          <p className="text-xs text-gray-400">Sisa Stok: <span className="text-white font-medium">{p.stock}</span> · Terjual: <span className="text-white font-medium">{p.sold_last_30d || 0} unit</span></p>
+                          <p className="text-xs text-gray-400">Sisa Stok: <span className="text-white font-medium">{p.stock}</span> · Terjual: <span className="text-white font-medium">{p.sold30d || 0} unit</span></p>
                         </div>
                       </div>
                       <div className="text-right">
