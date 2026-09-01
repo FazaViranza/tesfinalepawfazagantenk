@@ -10,7 +10,7 @@ const emptyForm = { category_id: '', name: '', sku: '', price: '', cost_price: '
 
 export default function Products() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isOwner = user?.role === 'owner';
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -90,7 +90,7 @@ export default function Products() {
             className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
           />
         </div>
-        {isAdmin && (
+        {isOwner && (
           <button onClick={openCreate} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
             <Plus className="w-4 h-4" /> Tambah Produk
           </button>
@@ -108,7 +108,7 @@ export default function Products() {
                 <th className="text-right px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Harga Jual</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">HPP (Modal)</th>
                 <th className="text-center px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Stok</th>
-                {isAdmin && <th className="text-center px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Aksi</th>}
+                {isOwner && <th className="text-center px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Aksi</th>}
               </tr>
             </thead>
             <tbody>
@@ -144,7 +144,7 @@ export default function Products() {
                       {p.stock} {p.unit}
                     </span>
                   </td>
-                  {isAdmin && (
+                  {isOwner && (
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-center gap-2">
                         <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-400 hover:bg-indigo-900/30">
