@@ -2,48 +2,85 @@ const { query, getClient } = require('../config/db');
 
 const getAll = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, search = '', status, payment_method } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      status,
+      payment_method,
+    } = req.query;
+
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+    const offset = (pageNumber - 1) * limitNumber;
+
     const params = [];
     let whereClause = 'WHERE 1=1';
 
+    // Cashier hanya boleh melihat transaksi miliknya sendiri.
+    // Owner boleh melihat seluruh transaksi.
+    if (userRole === 'cashier') {
+      params.push(userId);
+      whereClause += ` AND t.user_id = $${params.length}`;
+    }
+
     if (search) {
       params.push(`%${search}%`);
-      whereClause += ` AND (t.invoice_no ILIKE $${params.length} OR c.name ILIKE $${params.length})`;
+      whereClause += ` AND t.invoice_no ILIKE $${params.length}`;
     }
+
     if (status) {
       params.push(status);
       whereClause += ` AND t.status = $${params.length}`;
     }
+
     if (payment_method) {
       params.push(payment_method);
       whereClause += ` AND t.payment_method = $${params.length}`;
     }
 
+    // Count transaksi
     const countRes = await query(
-      `SELECT COUNT(*) FROM transactions t LEFT JOIN customers c ON t.customer_id = c.id ${whereClause}`,
+      `
+      SELECT COUNT(*)
+      FROM transactions t
+      ${whereClause}
+      `,
       params
     );
 
-    params.push(parseInt(limit), offset);
+    const total = parseInt(countRes.rows[0].count, 10);
+
+    // Ambil transaksi
+    const dataParams = [...params, limitNumber, offset];
+
     const txRes = await query(
-      `SELECT t.*, c.name as customer_name, u.name as cashier_name
-       FROM transactions t
-       LEFT JOIN customers c ON t.customer_id = c.id
-       LEFT JOIN users u ON t.user_id = u.id
-       ${whereClause}
-       ORDER BY t.created_at DESC
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
+      `
+      SELECT
+        t.*,
+        u.name AS cashier_name
+      FROM transactions t
+      LEFT JOIN users u
+        ON t.user_id = u.id
+      ${whereClause}
+      ORDER BY t.created_at DESC
+      LIMIT $${dataParams.length - 1}
+      OFFSET $${dataParams.length}
+      `,
+      dataParams
     );
 
     res.json({
       success: true,
       data: txRes.rows,
       meta: {
-        total: parseInt(countRes.rows[0].count, 10),
-        page: parseInt(page),
-        limit: parseInt(limit),
+        total,
+        page: pageNumber,
+        limit: limitNumber,
+        totalPages: Math.ceil(total / limitNumber),
       },
     });
   } catch (err) {
@@ -53,24 +90,61 @@ const getAll = async (req, res, next) => {
 
 const getById = async (req, res, next) => {
   try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const params = [req.params.id];
+
+    let ownershipClause = '';
+
+    // Cashier hanya boleh membuka transaksi miliknya sendiri.
+    if (userRole === 'cashier') {
+      params.push(userId);
+      ownershipClause = `AND t.user_id = $${params.length}`;
+    }
+
     const txRes = await query(
-      `SELECT t.*, c.name as customer_name, c.phone as customer_phone, u.name as cashier_name
-       FROM transactions t
-       LEFT JOIN customers c ON t.customer_id = c.id
-       LEFT JOIN users u ON t.user_id = u.id
-       WHERE t.id = $1`,
-      [req.params.id]
+      `
+      SELECT
+        t.*,
+        u.name AS cashier_name
+      FROM transactions t
+      LEFT JOIN users u
+        ON t.user_id = u.id
+      WHERE t.id = $1
+      ${ownershipClause}
+      `,
+      params
     );
-    if (!txRes.rows.length) return res.status(404).json({ success: false, message: 'Transaksi tidak ditemukan.' });
+
+    if (!txRes.rows.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaksi tidak ditemukan.',
+      });
+    }
 
     const detailsRes = await query(
-      `SELECT td.*, p.image_url FROM transaction_details td
-       LEFT JOIN products p ON td.product_id = p.id
-       WHERE td.transaction_id = $1`,
+      `
+      SELECT
+        td.*,
+        p.image_url
+      FROM transaction_details td
+      LEFT JOIN products p
+        ON td.product_id = p.id
+      WHERE td.transaction_id = $1
+      ORDER BY td.id ASC
+      `,
       [req.params.id]
     );
 
-    res.json({ success: true, data: { ...txRes.rows[0], items: detailsRes.rows } });
+    res.json({
+      success: true,
+      data: {
+        ...txRes.rows[0],
+        items: detailsRes.rows,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -78,42 +152,137 @@ const getById = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   const client = await getClient();
+
   try {
     await client.query('BEGIN');
 
-    const { customer_id, items, discount_amount = 0, payment_method = 'cash', paid_amount, notes } = req.body;
+    const {
+      items,
+      discount_amount = 0,
+      payment_method = 'cash',
+      paid_amount,
+      notes,
+    } = req.body;
+
+    // User otomatis diambil dari JWT.
     const userId = req.user.id;
 
-    if (!items || items.length === 0) {
+    // ==========================================
+    // VALIDASI CART
+    // ==========================================
+
+    if (!Array.isArray(items) || items.length === 0) {
       await client.query('ROLLBACK');
       client.release();
-      return res.status(400).json({ success: false, message: 'Keranjang belanja kosong.' });
+
+      return res.status(400).json({
+        success: false,
+        message: 'Keranjang belanja kosong.',
+      });
     }
 
-    // Validate and collect product data
+    // ==========================================
+    // VALIDASI PAYMENT METHOD
+    // ==========================================
+
+    const allowedPaymentMethods = [
+      'cash',
+      'qris',
+      'transfer',
+    ];
+
+    if (!allowedPaymentMethods.includes(payment_method)) {
+      await client.query('ROLLBACK');
+      client.release();
+
+      return res.status(400).json({
+        success: false,
+        message: 'Metode pembayaran tidak valid.',
+      });
+    }
+
+    // ==========================================
+    // VALIDASI PRODUK & HITUNG TOTAL
+    // ==========================================
+
     let totalAmount = 0;
     const itemsData = [];
+
     for (const item of items) {
-      const prodRes = await client.query('SELECT * FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
+      const productId = parseInt(item.product_id, 10);
+      const quantity = parseInt(item.quantity, 10);
+
+      if (!Number.isInteger(productId) || !Number.isInteger(quantity) || quantity <= 0) {
+        await client.query('ROLLBACK');
+        client.release();
+
+        return res.status(400).json({
+          success: false,
+          message: 'Data produk atau quantity tidak valid.',
+        });
+      }
+
+      const prodRes = await client.query(
+        `
+        SELECT *
+        FROM products
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [productId]
+      );
+
       if (!prodRes.rows.length) {
         await client.query('ROLLBACK');
         client.release();
-        return res.status(400).json({ success: false, message: `Produk ID ${item.product_id} tidak ditemukan.` });
+
+        return res.status(400).json({
+          success: false,
+          message: `Produk ID ${productId} tidak ditemukan.`,
+        });
       }
-      const prod = prodRes.rows[0];
-      if (prod.stock < item.quantity) {
+
+      const product = prodRes.rows[0];
+
+      if (product.stock < quantity) {
         await client.query('ROLLBACK');
         client.release();
-        return res.status(400).json({ success: false, message: `Stok ${prod.name} tidak mencukupi (sisa: ${prod.stock}).` });
+
+        return res.status(400).json({
+          success: false,
+          message:
+            `Stok ${product.name} tidak mencukupi ` +
+            `(sisa: ${product.stock}).`,
+        });
       }
-      const subtotal = parseFloat(prod.price) * item.quantity;
+
+      const unitPrice = parseFloat(product.price);
+      const costPrice = parseFloat(product.cost_price);
+      const subtotal = unitPrice * quantity;
+
       totalAmount += subtotal;
-      itemsData.push({ ...item, product: prod, unit_price: parseFloat(prod.price), cost_price: parseFloat(prod.cost_price), subtotal });
+
+      itemsData.push({
+        productId,
+        quantity,
+        product,
+        unitPrice,
+        costPrice,
+        subtotal,
+      });
     }
 
-    const disc = parseFloat(discount_amount) || 0;
+    // ==========================================
+    // DISCOUNT
+    // ==========================================
 
-    if (disc < 0 || disc > totalAmount) {
+    const discount = parseFloat(discount_amount) || 0;
+
+    if (
+      Number.isNaN(discount) ||
+      discount < 0 ||
+      discount > totalAmount
+    ) {
       await client.query('ROLLBACK');
       client.release();
 
@@ -123,14 +292,23 @@ const create = async (req, res, next) => {
       });
     }
 
-    const finalAmount = totalAmount - disc;
+    const finalAmount = totalAmount - discount;
+
+    // ==========================================
+    // PAYMENT
+    // ==========================================
 
     const paid =
-      paid_amount === undefined || paid_amount === null
+      paid_amount === undefined ||
+      paid_amount === null ||
+      paid_amount === ''
         ? finalAmount
         : parseFloat(paid_amount);
 
-    if (Number.isNaN(paid) || paid < finalAmount) {
+    if (
+      Number.isNaN(paid) ||
+      paid < finalAmount
+    ) {
       await client.query('ROLLBACK');
       client.release();
 
@@ -142,67 +320,179 @@ const create = async (req, res, next) => {
 
     const change = paid - finalAmount;
 
-    // Generate invoice number
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-    const countRes = await client.query(`SELECT COUNT(*) FROM transactions WHERE DATE(created_at) = CURRENT_DATE`);
-    const seqNum = String(parseInt(countRes.rows[0].count, 10) + 1).padStart(4, '0');
-    const invoiceNo = `INV-${dateStr}-${seqNum}`;
+    // ==========================================
+    // GENERATE INVOICE
+    // ==========================================
 
-    // Insert transaction
-    const txRes = await client.query(
-      `INSERT INTO transactions (invoice_no, user_id, customer_id, total_amount, discount_amount, final_amount, paid_amount, change_amount, payment_method, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [invoiceNo, userId, customer_id || null, totalAmount, disc, finalAmount, paid, change, payment_method, notes || null]
+    const now = new Date();
+
+    const dateStr =
+      `${now.getFullYear()}` +
+      `${String(now.getMonth() + 1).padStart(2, '0')}` +
+      `${String(now.getDate()).padStart(2, '0')}`;
+
+    const countRes = await client.query(
+      `
+      SELECT COUNT(*)
+      FROM transactions
+      WHERE DATE(created_at) = CURRENT_DATE
+      `
     );
+
+    const seqNum =
+      String(
+        parseInt(countRes.rows[0].count, 10) + 1
+      ).padStart(4, '0');
+
+    const invoiceNo =
+      `INV-${dateStr}-${seqNum}`;
+
+    // ==========================================
+    // INSERT TRANSACTION
+    // ==========================================
+
+    const txRes = await client.query(
+      `
+      INSERT INTO transactions (
+        invoice_no,
+        user_id,
+        total_amount,
+        discount_amount,
+        tax_amount,
+        final_amount,
+        paid_amount,
+        change_amount,
+        payment_method,
+        status,
+        notes
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11
+      )
+      RETURNING *
+      `,
+      [
+        invoiceNo,
+        userId,
+        totalAmount,
+        discount,
+        0,
+        finalAmount,
+        paid,
+        change,
+        payment_method,
+        'completed',
+        notes || null,
+      ]
+    );
+
     const newTx = txRes.rows[0];
 
-    // Insert items & deduct stock
+    // ==========================================
+    // INSERT DETAILS + UPDATE STOCK
+    // ==========================================
+
     for (const item of itemsData) {
       await client.query(
-        `INSERT INTO transaction_details (transaction_id, product_id, product_name, quantity, unit_price, cost_price, subtotal)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [newTx.id, item.product_id, item.product.name, item.quantity, item.unit_price, item.cost_price, item.subtotal]
+        `
+        INSERT INTO transaction_details (
+          transaction_id,
+          product_id,
+          product_name,
+          quantity,
+          unit_price,
+          cost_price,
+          subtotal
+        )
+        VALUES (
+          $1, $2, $3, $4,
+          $5, $6, $7
+        )
+        `,
+        [
+          newTx.id,
+          item.productId,
+          item.product.name,
+          item.quantity,
+          item.unitPrice,
+          item.costPrice,
+          item.subtotal,
+        ]
       );
-      await client.query('UPDATE products SET stock = stock - $1, updated_at = NOW() WHERE id = $2', [item.quantity, item.product_id]);
-    }
 
-    // Update customer stats
-    if (customer_id) {
-      const tier = finalAmount >= 500000 ? 'Platinum' : finalAmount >= 200000 ? 'Gold' : finalAmount >= 100000 ? 'Silver' : 'Regular';
       await client.query(
-        `UPDATE customers SET total_spent = total_spent + $1, total_orders = total_orders + 1,
-         member_tier = CASE WHEN total_spent + $1 >= 500000 THEN 'Platinum' WHEN total_spent + $1 >= 200000 THEN 'Gold' WHEN total_spent + $1 >= 100000 THEN 'Silver' ELSE member_tier END,
-         updated_at = NOW() WHERE id = $2`,
-        [finalAmount, customer_id]
+        `
+        UPDATE products
+        SET
+          stock = stock - $1,
+          updated_at = NOW()
+        WHERE id = $2
+        `,
+        [
+          item.quantity,
+          item.productId,
+        ]
       );
     }
 
     await client.query('COMMIT');
     client.release();
 
-    // Fetch complete transaction with details for receipt
+    // ==========================================
+    // FETCH COMPLETE TRANSACTION
+    // ==========================================
+
     const fullTx = await query(
-      `SELECT t.*, c.name as customer_name, u.name as cashier_name FROM transactions t
-       LEFT JOIN customers c ON t.customer_id = c.id
-       LEFT JOIN users u ON t.user_id = u.id WHERE t.id = $1`,
+      `
+      SELECT
+        t.*,
+        u.name AS cashier_name
+      FROM transactions t
+      LEFT JOIN users u
+        ON t.user_id = u.id
+      WHERE t.id = $1
+      `,
       [newTx.id]
     );
+
     const details = await query(
-      'SELECT td.*, p.image_url FROM transaction_details td LEFT JOIN products p ON td.product_id = p.id WHERE td.transaction_id = $1',
+      `
+      SELECT
+        td.*,
+        p.image_url
+      FROM transaction_details td
+      LEFT JOIN products p
+        ON td.product_id = p.id
+      WHERE td.transaction_id = $1
+      ORDER BY td.id ASC
+      `,
       [newTx.id]
     );
 
     res.status(201).json({
       success: true,
       message: 'Transaksi berhasil diproses!',
-      data: { ...fullTx.rows[0], items: details.rows },
+      data: {
+        ...fullTx.rows[0],
+        items: details.rows,
+      },
     });
+
   } catch (err) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      // Ignore rollback error
+    }
+
     client.release();
     next(err);
   }
 };
 
-module.exports = { getAll, getById, create };
+module.exports = {
+  getAll,
+  getById,
+  create,
+};

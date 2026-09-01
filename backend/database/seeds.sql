@@ -152,39 +152,7 @@ ON CONFLICT (id) DO UPDATE SET
     description = EXCLUDED.description;
 
 
--- ===================================================
--- 4. CUSTOMERS
--- Customer tetap berupa data pelanggan opsional.
--- Mereka bukan user yang login.
--- ===================================================
-
-INSERT INTO customers
-(id, name, email, phone, address, member_tier, total_spent, total_orders)
-VALUES
-
-(1, 'Andi Pratama', 'andi@example.com', '081122334455',
- 'Jl. Magelang, Yogyakarta', 'Gold', 850000, 24),
-
-(2, 'Dewi Lestari', 'dewi@example.com', '081299887766',
- 'Jl. Kaliurang, Yogyakarta', 'Silver', 420000, 13),
-
-(3, 'Rian Saputra', 'rian@example.com', '081377665544',
- 'Jl. Godean, Yogyakarta', 'Silver', 350000, 11),
-
-(4, 'Maya Sari', 'maya@example.com', '081544332211',
- 'Jl. Bantul, Yogyakarta', 'Regular', 125000, 5),
-
-(5, 'Fajar Nugroho', 'fajar@example.com', '081788990011',
- 'Jl. Imogiri, Yogyakarta', 'Regular', 90000, 4)
-
-ON CONFLICT (id) DO UPDATE SET
-    name = EXCLUDED.name,
-    email = EXCLUDED.email,
-    phone = EXCLUDED.phone,
-    address = EXCLUDED.address,
-    member_tier = EXCLUDED.member_tier;
-
-
+-- 
 -- ===================================================
 -- 5. RESET SEQUENCES
 -- ===================================================
@@ -204,10 +172,7 @@ SELECT setval(
     COALESCE((SELECT MAX(id) FROM products), 1)
 );
 
-SELECT setval(
-    'customers_id_seq',
-    COALESCE((SELECT MAX(id) FROM customers), 1)
-);
+
 
 
 -- ===================================================
@@ -220,7 +185,6 @@ DECLARE
     i INTEGER;
     tx_id INTEGER;
     selected_user INTEGER;
-    selected_customer INTEGER;
     selected_product INTEGER;
     qty INTEGER;
     unit_price NUMERIC;
@@ -233,17 +197,8 @@ BEGIN
     -- Buat 120 transaksi historis
     FOR i IN 1..120 LOOP
 
-        selected_user :=
-            CASE
-                WHEN random() < 0.75 THEN 2
-                ELSE 1
-            END;
+        selected_user := 2;
 
-        selected_customer :=
-            CASE
-                WHEN random() < 0.65 THEN FLOOR(random() * 5 + 1)::INTEGER
-                ELSE NULL
-            END;
 
         tx_date :=
             NOW()
@@ -255,7 +210,6 @@ BEGIN
         INSERT INTO transactions (
             invoice_no,
             user_id,
-            customer_id,
             total_amount,
             discount_amount,
             tax_amount,
@@ -273,7 +227,6 @@ BEGIN
             LPAD(i::TEXT, 4, '0'),
 
             selected_user,
-            selected_customer,
             0,
             0,
             0,
