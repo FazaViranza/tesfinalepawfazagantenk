@@ -87,7 +87,7 @@ function AppRoutes() {
 
       <Route
         path="/catalog"
-        element={<Catalog />}
+        element={<Home />}
       />
 
       {/* =========================================

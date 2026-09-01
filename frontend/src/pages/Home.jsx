@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Search, ShoppingBag, Sparkles, MessageCircle, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Search,
+  ShoppingBag,
+  Sparkles,
+  MessageCircle,
+  X,
+  Send,
+  Bot,
+  User,
+} from 'lucide-react';
 
 import api from '../api';
 
@@ -14,6 +23,19 @@ function Home() {
   const [error, setError] = useState('');
 
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      role: 'assistant',
+      text:
+        'Halo! 👋 Aku bisa membantu mencari informasi tentang produk, harga, kategori, dan ketersediaan stok.',
+    },
+  ]);
+
+  const chatEndRef = useRef(null);
 
   // ==========================================
   // LOAD CATALOG
@@ -45,6 +67,18 @@ function Home() {
 
     loadCatalog();
   }, []);
+
+  // ==========================================
+  // AUTO SCROLL CHAT
+  // ==========================================
+
+  useEffect(() => {
+    if (chatOpen) {
+      chatEndRef.current?.scrollIntoView({
+        behavior: 'smooth',
+      });
+    }
+  }, [messages, chatOpen]);
 
   // ==========================================
   // FILTER PRODUCTS
@@ -98,6 +132,76 @@ function Home() {
   };
 
   // ==========================================
+  // SEND CHAT MESSAGE
+  // ==========================================
+
+  const sendMessage = async (messageOverride = null) => {
+    const message =
+      typeof messageOverride === 'string'
+        ? messageOverride.trim()
+        : chatInput.trim();
+
+    if (!message || chatLoading) return;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        role: 'user',
+        text: message,
+      },
+    ]);
+
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const response = await api.post('/ai/chat', {
+        message,
+      });
+
+      const reply =
+        response?.data?.reply ||
+        'Maaf, aku belum mendapatkan jawaban.';
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: 'assistant',
+          text: reply,
+        },
+      ]);
+    } catch (err) {
+      console.error('Chat AI error:', err);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: 'assistant',
+          text:
+            err.message ||
+            'Maaf, terjadi kesalahan saat menghubungi AI.',
+        },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  // ==========================================
+  // ENTER TO SEND
+  // ==========================================
+
+  const handleChatKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  // ==========================================
   // PRODUCT CARD
   // ==========================================
 
@@ -106,7 +210,6 @@ function Home() {
 
     return (
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-        {/* Image */}
         <div className="h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
           {product.image_url ? (
             <img
@@ -119,7 +222,6 @@ function Home() {
           )}
         </div>
 
-        {/* Content */}
         <div className="p-4">
           <p className="text-xs text-indigo-600 font-semibold mb-1">
             {product.category_name ||
@@ -142,7 +244,7 @@ function Home() {
 
             {stock > 0 ? (
               <span className="text-xs font-medium text-green-600">
-                Tersedia
+                Tersedia ({stock})
               </span>
             ) : (
               <span className="text-xs font-medium text-red-500">
@@ -189,7 +291,6 @@ function Home() {
 
           <div className="flex items-center justify-between gap-4">
 
-            {/* Brand */}
             <div>
               <h1 className="text-xl font-bold text-gray-900">
                 UMKM<span className="text-indigo-600">.AI</span>
@@ -200,7 +301,6 @@ function Home() {
               </p>
             </div>
 
-            {/* Search */}
             <div className="hidden md:block flex-1 max-w-xl">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -215,7 +315,6 @@ function Home() {
               </div>
             </div>
 
-            {/* Chat */}
             <button
               onClick={() => setChatOpen(true)}
               className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
@@ -230,6 +329,7 @@ function Home() {
           </div>
 
           {/* Mobile Search */}
+
           <div className="md:hidden mt-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -284,16 +384,13 @@ function Home() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
 
-        {/* Error */}
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">
             {error}
           </div>
         )}
 
-        {/* ====================================
-            CATEGORY FILTER
-        ==================================== */}
+        {/* CATEGORY */}
 
         <section className="mb-10">
 
@@ -336,9 +433,7 @@ function Home() {
 
         </section>
 
-        {/* ====================================
-            RECOMMENDED
-        ==================================== */}
+        {/* RECOMMENDED */}
 
         {!search &&
           selectedCategory === 'all' &&
@@ -365,14 +460,11 @@ function Home() {
             </section>
           )}
 
-        {/* ====================================
-            ALL PRODUCTS
-        ==================================== */}
+        {/* ALL PRODUCTS */}
 
         <section>
 
           <div className="flex items-center justify-between mb-5">
-
             <div>
               <h2 className="text-xl font-bold">
                 Semua Produk
@@ -382,7 +474,6 @@ function Home() {
                 {filteredProducts.length} produk ditemukan
               </p>
             </div>
-
           </div>
 
           {filteredProducts.length === 0 ? (
@@ -417,7 +508,7 @@ function Home() {
       </main>
 
       {/* ======================================
-          AI CHAT FLOATING BUTTON
+          FLOATING CHAT BUTTON
       ====================================== */}
 
       {!chatOpen && (
@@ -431,17 +522,20 @@ function Home() {
       )}
 
       {/* ======================================
-          AI CHAT PANEL
+          CHAT PANEL
       ====================================== */}
 
       {chatOpen && (
-        <div className="fixed bottom-6 right-6 w-[calc(100vw-2rem)] sm:w-96 h-[520px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
+        <div className="fixed bottom-6 right-6 w-[calc(100vw-2rem)] sm:w-96 h-[560px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col">
+
+          {/* Header */}
 
           <div className="flex items-center justify-between px-4 py-4 bg-indigo-600 text-white">
 
             <div className="flex items-center gap-3">
+
               <div className="w-9 h-9 bg-white/15 rounded-full flex items-center justify-center">
-                <Sparkles className="w-5 h-5" />
+                <Bot className="w-5 h-5" />
               </div>
 
               <div>
@@ -453,6 +547,7 @@ function Home() {
                   Tanya seputar produk
                 </p>
               </div>
+
             </div>
 
             <button
@@ -464,49 +559,124 @@ function Home() {
 
           </div>
 
-          <div className="h-[calc(100%-73px)] flex flex-col">
+          {/* Messages */}
 
-            <div className="flex-1 p-5 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
 
-              <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm p-4 max-w-[85%] shadow-sm">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex gap-2 ${
+                  message.role === 'user'
+                    ? 'justify-end'
+                    : 'justify-start'
+                }`}
+              >
 
-                <p className="text-sm text-gray-700">
-                  Halo! 👋
-                </p>
+                {message.role === 'assistant' && (
+                  <div className="w-7 h-7 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-4 h-4" />
+                  </div>
+                )}
 
-                <p className="text-sm text-gray-700 mt-2">
-                  Saya bisa membantu mencari informasi
-                  tentang produk, harga, kategori, dan
-                  ketersediaan stok.
-                </p>
+                <div
+                  className={`max-w-[80%] rounded-2xl px-3 py-2.5 text-sm whitespace-pre-line ${
+                    message.role === 'user'
+                      ? 'bg-indigo-600 text-white rounded-tr-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 rounded-tl-sm'
+                  }`}
+                >
+                  {message.text}
+                </div>
 
-                <div className="mt-4 space-y-2">
+                {message.role === 'user' && (
+                  <div className="w-7 h-7 bg-gray-200 text-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="w-4 h-4" />
+                  </div>
+                )}
 
-                  {[
-                    'Ada minuman apa?',
-                    'Ada cemilan apa?',
-                    'Ada Indomie?',
-                  ].map((question) => (
-                    <button
-                      key={question}
-                      className="block w-full text-left px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-medium"
-                    >
-                      {question}
-                    </button>
-                  ))}
+              </div>
+            ))}
 
+            {/* AI loading */}
+
+            {chatLoading && (
+              <div className="flex gap-2">
+
+                <div className="w-7 h-7 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Bot className="w-4 h-4" />
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                  </div>
                 </div>
 
               </div>
+            )}
+
+            {/* Quick Actions */}
+
+            {messages.length === 1 && !chatLoading && (
+              <div className="pt-2 space-y-2">
+
+                <p className="text-xs text-gray-400">
+                  Coba tanyakan:
+                </p>
+
+                {[
+                  'Ada minuman apa?',
+                  'Ada cemilan apa?',
+                  'Ada Indomie?',
+                ].map((question) => (
+                  <button
+                    key={question}
+                    onClick={() => sendMessage(question)}
+                    className="block w-full text-left px-3 py-2 bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 text-indigo-700 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    {question}
+                  </button>
+                ))}
+
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+
+          </div>
+
+          {/* Input */}
+
+          <div className="border-t border-gray-200 p-3 bg-white">
+
+            <div className="flex items-end gap-2">
+
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={handleChatKeyDown}
+                placeholder="Tanya tentang produk..."
+                rows={1}
+                disabled={chatLoading}
+                className="flex-1 resize-none max-h-24 px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100"
+              />
+
+              <button
+                onClick={() => sendMessage()}
+                disabled={!chatInput.trim() || chatLoading}
+                className="w-10 h-10 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white rounded-xl transition-colors"
+              >
+                <Send className="w-4 h-4" />
+              </button>
 
             </div>
 
-            <div className="border-t border-gray-200 p-3">
-              <p className="text-xs text-gray-400 text-center">
-                Chatbot produk akan kita sambungkan
-                ke API AI berikutnya.
-              </p>
-            </div>
+            <p className="text-[10px] text-gray-400 mt-2 text-center">
+              AI hanya memberikan informasi katalog produk.
+            </p>
 
           </div>
 
