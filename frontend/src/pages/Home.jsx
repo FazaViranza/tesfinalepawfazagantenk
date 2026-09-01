@@ -1,32 +1,518 @@
-import { useHealthCheck } from '../hooks/useHealthCheck';
-import HealthBadge from '../components/HealthBadge';
+import { useEffect, useMemo, useState } from 'react';
+import { Search, ShoppingBag, Sparkles, MessageCircle, X } from 'lucide-react';
+
+import api from '../api';
 
 function Home() {
-  const { status, data, checkHealth } = useHealthCheck();
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="bg-white border border-gray-200 rounded-xl p-6 max-w-sm w-full text-center shadow-sm">
-        <h1 className="text-xl font-bold text-gray-800 mb-1">Frontend Template</h1>
-        <p className="text-sm text-gray-500 mb-4">Vite + React + Tailwind</p>
+  const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
-        <div className="mb-4">
-          <HealthBadge status={status} />
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // ==========================================
+  // LOAD CATALOG
+  // ==========================================
+
+  useEffect(() => {
+    const loadCatalog = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const [productsRes, categoriesRes] = await Promise.all([
+          api.get('/products'),
+          api.get('/categories'),
+        ]);
+
+        setProducts(productsRes.data || []);
+        setCategories(categoriesRes.data || []);
+      } catch (err) {
+        console.error('Gagal memuat katalog:', err);
+
+        setError(
+          err.message || 'Gagal memuat katalog produk.'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCatalog();
+  }, []);
+
+  // ==========================================
+  // FILTER PRODUCTS
+  // ==========================================
+
+  const filteredProducts = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+
+    return products.filter((product) => {
+      const productName =
+        product.name?.toLowerCase() || '';
+
+      const categoryName =
+        product.category_name?.toLowerCase() ||
+        product.category?.name?.toLowerCase() ||
+        '';
+
+      const matchesSearch =
+        !keyword ||
+        productName.includes(keyword) ||
+        categoryName.includes(keyword);
+
+      const productCategoryId =
+        product.category_id ??
+        product.category?.id;
+
+      const matchesCategory =
+        selectedCategory === 'all' ||
+        String(productCategoryId) === String(selectedCategory);
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, search, selectedCategory]);
+
+  // ==========================================
+  // RECOMMENDED PRODUCTS
+  // ==========================================
+
+  const recommendedProducts = useMemo(() => {
+    return products
+      .filter((product) => Number(product.stock) > 0)
+      .slice(0, 4);
+  }, [products]);
+
+  // ==========================================
+  // FORMAT PRICE
+  // ==========================================
+
+  const formatPrice = (price) => {
+    return `Rp ${Number(price || 0).toLocaleString('id-ID')}`;
+  };
+
+  // ==========================================
+  // PRODUCT CARD
+  // ==========================================
+
+  const ProductCard = ({ product }) => {
+    const stock = Number(product.stock || 0);
+
+    return (
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
+        {/* Image */}
+        <div className="h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <ShoppingBag className="w-12 h-12 text-gray-300" />
+          )}
         </div>
 
-        {data && (
-          <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-left overflow-x-auto mb-4">
-            {JSON.stringify(data, null, 2)}
-          </pre>
+        {/* Content */}
+        <div className="p-4">
+          <p className="text-xs text-indigo-600 font-semibold mb-1">
+            {product.category_name ||
+              product.category?.name ||
+              'Produk'}
+          </p>
+
+          <h3 className="font-semibold text-gray-900 line-clamp-2 min-h-[48px]">
+            {product.name}
+          </h3>
+
+          <p className="text-lg font-bold text-gray-900 mt-2">
+            {formatPrice(product.price)}
+          </p>
+
+          <div className="flex items-center justify-between mt-3">
+            <span className="text-xs text-gray-500">
+              {product.unit || 'pcs'}
+            </span>
+
+            {stock > 0 ? (
+              <span className="text-xs font-medium text-green-600">
+                Tersedia
+              </span>
+            ) : (
+              <span className="text-xs font-medium text-red-500">
+                Stok habis
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // LOADING
+  // ==========================================
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+
+          <p className="text-gray-500 text-sm">
+            Memuat katalog produk...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // PAGE
+  // ==========================================
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+
+      {/* ======================================
+          NAVBAR
+      ====================================== */}
+
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+
+          <div className="flex items-center justify-between gap-4">
+
+            {/* Brand */}
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">
+                UMKM<span className="text-indigo-600">.AI</span>
+              </h1>
+
+              <p className="text-xs text-gray-500">
+                Katalog Produk
+              </p>
+            </div>
+
+            {/* Search */}
+            <div className="hidden md:block flex-1 max-w-xl">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Cari nama produk..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Chat */}
+            <button
+              onClick={() => setChatOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" />
+
+              <span className="hidden sm:inline">
+                Tanya AI
+              </span>
+            </button>
+
+          </div>
+
+          {/* Mobile Search */}
+          <div className="md:hidden mt-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari produk..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+        </div>
+      </header>
+
+      {/* ======================================
+          HERO
+      ====================================== */}
+
+      <section className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14 md:py-20">
+
+          <div className="max-w-2xl">
+
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/20 rounded-full text-xs font-medium mb-5">
+              <Sparkles className="w-4 h-4" />
+              Katalog UMKM.AI
+            </div>
+
+            <h2 className="text-3xl md:text-5xl font-bold leading-tight">
+              Temukan kebutuhanmu
+              <br />
+              dengan mudah.
+            </h2>
+
+            <p className="mt-4 text-indigo-100 max-w-xl">
+              Jelajahi berbagai produk yang tersedia,
+              cari berdasarkan nama, atau pilih kategori
+              yang kamu butuhkan.
+            </p>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ======================================
+          CONTENT
+      ====================================== */}
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+
+        {/* Error */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">
+            {error}
+          </div>
         )}
 
+        {/* ====================================
+            CATEGORY FILTER
+        ==================================== */}
+
+        <section className="mb-10">
+
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">
+              Kategori
+            </h2>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-2">
+
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                selectedCategory === 'all'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Semua Produk
+            </button>
+
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() =>
+                  setSelectedCategory(category.id)
+                }
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  String(selectedCategory) === String(category.id)
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {category.name}
+              </button>
+            ))}
+
+          </div>
+
+        </section>
+
+        {/* ====================================
+            RECOMMENDED
+        ==================================== */}
+
+        {!search &&
+          selectedCategory === 'all' &&
+          recommendedProducts.length > 0 && (
+            <section className="mb-12">
+
+              <div className="flex items-center gap-2 mb-5">
+                <Sparkles className="w-5 h-5 text-indigo-600" />
+
+                <h2 className="text-xl font-bold">
+                  Produk Pilihan
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {recommendedProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                  />
+                ))}
+              </div>
+
+            </section>
+          )}
+
+        {/* ====================================
+            ALL PRODUCTS
+        ==================================== */}
+
+        <section>
+
+          <div className="flex items-center justify-between mb-5">
+
+            <div>
+              <h2 className="text-xl font-bold">
+                Semua Produk
+              </h2>
+
+              <p className="text-sm text-gray-500 mt-1">
+                {filteredProducts.length} produk ditemukan
+              </p>
+            </div>
+
+          </div>
+
+          {filteredProducts.length === 0 ? (
+            <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center">
+
+              <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+
+              <h3 className="font-semibold text-gray-800">
+                Produk tidak ditemukan
+              </h3>
+
+              <p className="text-sm text-gray-500 mt-1">
+                Coba gunakan kata kunci atau kategori lain.
+              </p>
+
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                />
+              ))}
+
+            </div>
+          )}
+
+        </section>
+
+      </main>
+
+      {/* ======================================
+          AI CHAT FLOATING BUTTON
+      ====================================== */}
+
+      {!chatOpen && (
         <button
-          onClick={checkHealth}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-lg"
+          onClick={() => setChatOpen(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 z-40"
+          title="Tanya AI"
         >
-          Cek Ulang
+          <MessageCircle className="w-6 h-6" />
         </button>
-      </div>
+      )}
+
+      {/* ======================================
+          AI CHAT PANEL
+      ====================================== */}
+
+      {chatOpen && (
+        <div className="fixed bottom-6 right-6 w-[calc(100vw-2rem)] sm:w-96 h-[520px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
+
+          <div className="flex items-center justify-between px-4 py-4 bg-indigo-600 text-white">
+
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-white/15 rounded-full flex items-center justify-center">
+                <Sparkles className="w-5 h-5" />
+              </div>
+
+              <div>
+                <p className="font-semibold">
+                  UMKM.AI Assistant
+                </p>
+
+                <p className="text-xs text-indigo-100">
+                  Tanya seputar produk
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setChatOpen(false)}
+              className="p-1 hover:bg-white/10 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+          </div>
+
+          <div className="h-[calc(100%-73px)] flex flex-col">
+
+            <div className="flex-1 p-5 bg-gray-50">
+
+              <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm p-4 max-w-[85%] shadow-sm">
+
+                <p className="text-sm text-gray-700">
+                  Halo! 👋
+                </p>
+
+                <p className="text-sm text-gray-700 mt-2">
+                  Saya bisa membantu mencari informasi
+                  tentang produk, harga, kategori, dan
+                  ketersediaan stok.
+                </p>
+
+                <div className="mt-4 space-y-2">
+
+                  {[
+                    'Ada minuman apa?',
+                    'Ada cemilan apa?',
+                    'Ada Indomie?',
+                  ].map((question) => (
+                    <button
+                      key={question}
+                      className="block w-full text-left px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-medium"
+                    >
+                      {question}
+                    </button>
+                  ))}
+
+                </div>
+
+              </div>
+
+            </div>
+
+            <div className="border-t border-gray-200 p-3">
+              <p className="text-xs text-gray-400 text-center">
+                Chatbot produk akan kita sambungkan
+                ke API AI berikutnya.
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 }
