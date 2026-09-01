@@ -5,7 +5,7 @@ const config = require('../config/env');
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password, role, phone } = req.body;
+    const { name, email, password, phone } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -26,13 +26,12 @@ const register = async (req, res, next) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const userRole = role === 'cashier' ? 'cashier' : 'owner';
 
     const insertRes = await query(
       `INSERT INTO users (name, email, password, role, phone)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, name, email, role, phone, created_at`,
-      [name, email.toLowerCase(), hashedPassword, userRole, phone || null]
+      [name, email.toLowerCase(), hashedPassword, 'cashier', phone || null]
     );
 
     const newUser = insertRes.rows[0];

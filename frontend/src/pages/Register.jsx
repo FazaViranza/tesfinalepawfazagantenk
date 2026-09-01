@@ -6,7 +6,12 @@ import { Brain, UserPlus } from 'lucide-react';
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'admin', phone: '' });
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    phone: ''
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -15,7 +20,7 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      await register(form.name, form.email, form.password, form.role, form.phone);
+      await register(form.name, form.email, form.password, form.phone);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Registrasi gagal.');
@@ -67,17 +72,6 @@ export default function Register() {
               </div>
             ))}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Role</label>
-              <select
-                value={form.role}
-                onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 text-sm"
-              >
-                <option value="admin">Owner / Admin</option>
-                <option value="cashier">Kasir / Staff</option>
-              </select>
-            </div>
 
             <button
               type="submit"
