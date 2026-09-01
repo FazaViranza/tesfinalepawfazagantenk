@@ -447,15 +447,9 @@ export default function Dashboard() {
 
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
 
           {[
-            {
-              label: 'Buka Kasir POS',
-              to: '/pos',
-              color:
-                'from-indigo-600 to-indigo-700',
-            },
             {
               label: 'Prediksi Permintaan',
               to: '/ai/prediction',
