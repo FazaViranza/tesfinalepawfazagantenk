@@ -101,12 +101,12 @@ export default function AIInsights() {
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-1">
               <p className="text-xs text-gray-400 font-medium uppercase">Total Omset 30 Hari</p>
               <p className="text-2xl font-bold text-indigo-300">{formatRp(data.financials?.totalRevenue)}</p>
-              <p className="text-xs text-gray-400">{data.financials?.orderCount30d || 0} total transaksi</p>
+              <p className="text-xs text-gray-400">{data.financials?.totalOrders || 0} total transaksi</p>
             </div>
 
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-1">
               <p className="text-xs text-gray-400 font-medium uppercase">Total Laba Kotor</p>
-              <p className="text-2xl font-bold text-emerald-400">{formatRp(data.financials?.grossProfit30d)}</p>
+              <p className="text-2xl font-bold text-emerald-400">{formatRp(data.financials?.grossProfit)}</p>
               <p className="text-xs text-gray-400">Estimasi profit bersih kotor</p>
             </div>
 
