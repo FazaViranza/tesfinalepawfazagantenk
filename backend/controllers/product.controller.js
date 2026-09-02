@@ -7,8 +7,41 @@ const {
   validateUrl,
 } = require('../utils/validation');
 
-const validateProduct = (body) => {
+const validateProductId = (value) => {
+  if (!/^\d+$/.test(String(value))) {
+    return 'ID produk tidak valid.';
+  }
+
+  const id = Number(value);
+
+  if (!Number.isSafeInteger(id) || id < 1) {
+    return 'ID produk tidak valid.';
+  }
+
+  return null;
+};
+
+const validateCategoryId = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (!/^\d+$/.test(String(value))) {
+    return 'ID kategori tidak valid.';
+  }
+
+  const id = Number(value);
+
+  if (!Number.isSafeInteger(id) || id < 1) {
+    return 'ID kategori tidak valid.';
+  }
+
+  return null;
+};
+
+const validateProduct = (body = {}) => {
   const {
+    category_id,
     name,
     price,
     cost_price,
@@ -21,6 +54,9 @@ const validateProduct = (body) => {
   } = body;
 
   let error;
+
+  error = validateCategoryId(category_id);
+  if (error) return error;
 
   error = validateText(name, 'Nama produk', 150);
   if (error) return error;
@@ -68,6 +104,21 @@ const getAll = async (req, res, next) => {
   try {
     const { search = '', category_id } = req.query;
 
+    const categoryError = validateCategoryId(category_id);
+    if (categoryError) {
+      return res.status(400).json({
+        success: false,
+        message: categoryError,
+      });
+    }
+
+    if (typeof search !== 'string' || search.length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parameter pencarian tidak valid atau terlalu panjang.',
+      });
+    }
+
     let sql = `
       SELECT p.*, c.name as category_name, c.icon as category_icon
       FROM products p
@@ -77,13 +128,13 @@ const getAll = async (req, res, next) => {
 
     const params = [];
 
-    if (search) {
-      params.push(`%${search}%`);
+    if (search.trim()) {
+      params.push(`%${search.trim()}%`);
       sql += ` AND (p.name ILIKE $${params.length} OR p.sku ILIKE $${params.length})`;
     }
 
-    if (category_id) {
-      params.push(category_id);
+    if (category_id !== undefined && category_id !== '') {
+      params.push(Number(category_id));
       sql += ` AND p.category_id = $${params.length}`;
     }
 
@@ -102,12 +153,23 @@ const getAll = async (req, res, next) => {
 
 const getById = async (req, res, next) => {
   try {
+    const idError = validateProductId(req.params.id);
+
+    if (idError) {
+      return res.status(400).json({
+        success: false,
+        message: idError,
+      });
+    }
+
+    const productId = Number(req.params.id);
+
     const result = await query(
       `SELECT p.*, c.name as category_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        WHERE p.id = $1`,
-      [req.params.id]
+      [productId]
     );
 
     if (!result.rows.length) {
@@ -157,7 +219,7 @@ const create = async (req, res, next) => {
         ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING *`,
       [
-        category_id || null,
+        category_id === '' || category_id == null ? null : Number(category_id),
         name.trim(),
         sku ? sku.trim() : null,
         Number(price),
@@ -182,6 +244,15 @@ const create = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
+    const idError = validateProductId(req.params.id);
+
+    if (idError) {
+      return res.status(400).json({
+        success: false,
+        message: idError,
+      });
+    }
+
     const validationError = validateProduct(req.body);
 
     if (validationError) {
@@ -220,7 +291,7 @@ const update = async (req, res, next) => {
        WHERE id=$11
        RETURNING *`,
       [
-        category_id || null,
+        category_id === '' || category_id == null ? null : Number(category_id),
         name.trim(),
         sku ? sku.trim() : null,
         Number(price),
@@ -230,7 +301,7 @@ const update = async (req, res, next) => {
         unit ? unit.trim() : 'pcs',
         image_url ? image_url.trim() : null,
         description ? description.trim() : null,
-        req.params.id,
+        Number(req.params.id),
       ]
     );
 
@@ -253,9 +324,18 @@ const update = async (req, res, next) => {
 
 const remove = async (req, res, next) => {
   try {
+    const idError = validateProductId(req.params.id);
+
+    if (idError) {
+      return res.status(400).json({
+        success: false,
+        message: idError,
+      });
+    }
+
     const result = await query(
       'DELETE FROM products WHERE id=$1 RETURNING id',
-      [req.params.id]
+      [Number(req.params.id)]
     );
 
     if (!result.rows.length) {
