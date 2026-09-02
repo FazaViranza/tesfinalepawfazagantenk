@@ -163,7 +163,7 @@ const validateInteger = (
   }
 
   if (!integerRegex.test(String(value))) {
-    return `${fieldName} harus berupa angka bulat.';
+    return `${fieldName} harus berupa angka bulat.`;
   }
 
   const number = Number(value);
