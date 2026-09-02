@@ -60,9 +60,9 @@ export default function AIChat() {
     setMessages((prev) => [...prev, message]);
   };
 
-  const handleSend = async (textToSend = '') => {
+  const handleSend = async (textToSend) => {
     const query =
-      typeof textToSend === 'string'
+      typeof textToSend === 'string' && textToSend.trim()
         ? textToSend
         : input;
 
@@ -90,7 +90,7 @@ export default function AIChat() {
       time: getTime(),
     });
 
-    if (!textToSend) {
+    if (typeof textToSend !== 'string' || !textToSend.trim()) {
       setInput('');
     }
 
@@ -101,7 +101,7 @@ export default function AIChat() {
         message: cleanQuery,
       });
 
-      const responseData = res.data?.data || res.data;
+      const responseData = res.data;
 
       addMessage({
         id: `${Date.now()}-ai`,
