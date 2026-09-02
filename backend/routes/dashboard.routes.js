@@ -7,7 +7,7 @@ const { authenticate, authorize } = require('../middleware/auth.middleware');
 router.get(
   '/',
   authenticate,
-  authorize(['owner', 'cashier']),
+  authorize(['owner']),
   getDashboardStats
 );
 

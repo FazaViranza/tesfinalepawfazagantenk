@@ -51,7 +51,7 @@ router.post(
   getCrossSell
 );
 
-// Customer chatbot — public
+
 router.post(
   '/chat',
   authenticate,
