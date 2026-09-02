@@ -9,12 +9,25 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    role VARCHAR(50) DEFAULT 'owner',
+    role VARCHAR(50) NOT NULL DEFAULT 'owner',
     phone VARCHAR(30),
     avatar_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'users_role_check'
+    ) THEN
+        ALTER TABLE users
+        ADD CONSTRAINT users_role_check
+        CHECK (role IN ('owner', 'cashier'));
+    END IF;
+END $$;
 
 -- 2. CATEGORIES
 CREATE TABLE IF NOT EXISTS categories (
@@ -46,21 +59,16 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS transactions (
     id SERIAL PRIMARY KEY,
     invoice_no VARCHAR(50) UNIQUE NOT NULL,
-
-    -- User yang membuat transaksi
     user_id INT REFERENCES users(id) ON DELETE SET NULL,
-
     total_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
     discount_amount NUMERIC(12, 2) DEFAULT 0,
     tax_amount NUMERIC(12, 2) DEFAULT 0,
     final_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
     paid_amount NUMERIC(12, 2) NOT NULL DEFAULT 0,
     change_amount NUMERIC(12, 2) DEFAULT 0,
-
     payment_method VARCHAR(50) DEFAULT 'cash',
     status VARCHAR(50) DEFAULT 'completed',
     notes TEXT,
-
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -92,23 +100,10 @@ CREATE TABLE IF NOT EXISTS ai_insights (
 -- INDEXES
 -- ===================================================
 
-CREATE INDEX IF NOT EXISTS idx_products_category
-ON products(category_id);
-
-CREATE INDEX IF NOT EXISTS idx_products_sku
-ON products(sku);
-
-CREATE INDEX IF NOT EXISTS idx_transactions_created_at
-ON transactions(created_at);
-
-CREATE INDEX IF NOT EXISTS idx_transactions_user
-ON transactions(user_id);
-
-CREATE INDEX IF NOT EXISTS idx_trans_details_trans_id
-ON transaction_details(transaction_id);
-
-CREATE INDEX IF NOT EXISTS idx_trans_details_product_id
-ON transaction_details(product_id);
-
-CREATE INDEX IF NOT EXISTS idx_ai_insights_type
-ON ai_insights(type);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
+CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_trans_details_trans_id ON transaction_details(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_trans_details_product_id ON transaction_details(product_id);
+CREATE INDEX IF NOT EXISTS idx_ai_insights_type ON ai_insights(type);
