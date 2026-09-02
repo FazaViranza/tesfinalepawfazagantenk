@@ -2,6 +2,19 @@ const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').r
 
 const getToken = () => localStorage.getItem('umkm_token');
 
+const unwrapResponseData = (data) => {
+  if (
+    data &&
+    typeof data === 'object' &&
+    data.success === true &&
+    Object.prototype.hasOwnProperty.call(data, 'data')
+  ) {
+    return data.data;
+  }
+
+  return data;
+};
+
 const apiFetch = async (endpoint, options = {}) => {
   const token = getToken();
 
@@ -17,7 +30,7 @@ const apiFetch = async (endpoint, options = {}) => {
   });
 
   const contentType = res.headers.get('content-type') || '';
-  const data = contentType.includes('application/json')
+  const rawData = contentType.includes('application/json')
     ? await res.json()
     : null;
 
@@ -28,13 +41,11 @@ const apiFetch = async (endpoint, options = {}) => {
     }
 
     const error = new Error(
-      data?.message || `HTTP Error ${res.status}`
+      rawData?.message || `HTTP Error ${res.status}`
     );
 
-    // Keep an Axios-like response shape so existing pages
-    // can read err.response?.data?.message safely.
     error.response = {
-      data,
+      data: rawData,
       status: res.status,
       ok: res.ok,
     };
@@ -42,10 +53,8 @@ const apiFetch = async (endpoint, options = {}) => {
     throw error;
   }
 
-  // Existing frontend pages consume API results through res.data.
-  // Keep that contract consistent across GET/POST/PUT/DELETE.
   return {
-    data,
+    data: unwrapResponseData(rawData),
     status: res.status,
     ok: res.ok,
   };
