@@ -3,20 +3,39 @@ const jwt = require('jsonwebtoken');
 const { query } = require('../config/db');
 const config = require('../config/env');
 
+const {
+  validateEmail,
+  validatePassword,
+} = require('../utils/validation');
+
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const body = req.body || {};
+    const { email, password } = body;
 
-    if (!email || !password) {
+    let error = validateEmail(email);
+    if (error) {
       return res.status(400).json({
         success: false,
-        message: 'Email dan password wajib diisi.',
+        message: error,
       });
     }
 
+    error = validatePassword(password, true);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
     const userRes = await query(
-      'SELECT id, name, email, password, role, phone FROM users WHERE email = $1',
-      [email.toLowerCase().trim()]
+      `SELECT id, name, email, password, role, phone
+       FROM users
+       WHERE email = $1`,
+      [cleanEmail]
     );
 
     if (userRes.rows.length === 0) {
@@ -36,6 +55,13 @@ const login = async (req, res, next) => {
       });
     }
 
+    if (!['owner', 'cashier'].includes(user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Akun pengguna tidak memiliki role yang valid.',
+      });
+    }
+
     const token = jwt.sign(
       {
         id: user.id,
@@ -44,7 +70,10 @@ const login = async (req, res, next) => {
         role: user.role,
       },
       config.jwtSecret,
-      { expiresIn: config.jwtExpiresIn }
+      {
+        expiresIn: config.jwtExpiresIn,
+        algorithm: 'HS256',
+      }
     );
 
     delete user.password;
@@ -75,6 +104,13 @@ const getMe = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: 'Data pengguna tidak ditemukan.',
+      });
+    }
+
+    if (!['owner', 'cashier'].includes(userRes.rows[0].role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Role pengguna tidak valid.',
       });
     }
 
