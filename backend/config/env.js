@@ -1,9 +1,16 @@
 require('dotenv').config();
 
+const isProduction = process.env.NODE_ENV === 'production';
+const jwtSecret = process.env.JWT_SECRET;
+
+if (isProduction && (!jwtSecret || jwtSecret.length < 32)) {
+  throw new Error('JWT_SECRET wajib diatur dan minimal 32 karakter pada production.');
+}
+
 const config = {
-  port: process.env.PORT || 3000,
+  port: Number(process.env.PORT) || 3000,
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
-  jwtSecret: process.env.JWT_SECRET || 'umkm-ai-secret-key-2024-jwt-token-very-secure',
+  jwtSecret: jwtSecret || 'umkm-ai-secret-key-2024-jwt-token-very-secure',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   
   // Database PostgreSQL config
