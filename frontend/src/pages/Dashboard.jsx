@@ -32,12 +32,19 @@ const formatRp = (v) =>
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     api
       .get('/dashboard')
-      .then((res) => setData(res.data))
-      .catch(console.error)
+      .then((res) => {
+        const dashboardData = res?.data?.data || res?.data;
+        setData(dashboardData || null);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError(err?.message || 'Gagal memuat data dashboard.');
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -51,33 +58,27 @@ export default function Dashboard() {
 
   if (!data) {
     return (
-      <p className="text-gray-400">
-        Gagal memuat data dashboard.
-      </p>
+      <div className="bg-red-900/20 border border-red-800/40 rounded-xl p-4 text-sm text-red-300">
+        {error || 'Gagal memuat data dashboard.'}
+      </div>
     );
   }
 
   const {
-    summary,
-    weekChart,
-    topProducts,
-    recentTransactions,
-    aiInsights,
+    summary = {},
+    weekChart = [],
+    topProducts = [],
+    recentTransactions = [],
+    aiInsights = [],
   } = data;
 
   return (
     <div className="space-y-6">
-
-      {/* ==========================================
-          STATS GRID
-      ========================================== */}
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-
         <StatCard
           title="Pendapatan Hari Ini"
           value={formatRp(summary.todayRevenue)}
-          subtitle={`${summary.todayOrders} transaksi`}
+          subtitle={`${summary.todayOrders || 0} transaksi`}
           icon={TrendingUp}
           color="indigo"
         />
@@ -92,48 +93,31 @@ export default function Dashboard() {
 
         <StatCard
           title="Total Produk"
-          value={summary.totalProducts}
+          value={summary.totalProducts || 0}
           subtitle={
             summary.lowStockCount > 0
               ? `${summary.lowStockCount} stok rendah`
               : 'Semua stok aman'
           }
           icon={Package}
-          color={
-            summary.lowStockCount > 0
-              ? 'yellow'
-              : 'blue'
-          }
+          color={summary.lowStockCount > 0 ? 'yellow' : 'blue'}
         />
 
         <StatCard
           title="Stok Menipis"
-          value={summary.lowStockCount}
+          value={summary.lowStockCount || 0}
           subtitle={
             summary.lowStockCount > 0
               ? 'Perlu segera diperiksa'
               : 'Tidak ada stok kritis'
           }
           icon={AlertTriangle}
-          color={
-            summary.lowStockCount > 0
-              ? 'yellow'
-              : 'blue'
-          }
+          color={summary.lowStockCount > 0 ? 'yellow' : 'blue'}
         />
-
       </div>
 
-      {/* ==========================================
-          CHART + AI INSIGHTS
-      ========================================== */}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Weekly Sales Chart */}
-
         <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-2xl p-5">
-
           <h3 className="text-sm font-semibold text-white mb-4">
             📈 Grafik Penjualan 7 Hari Terakhir
           </h3>
@@ -141,57 +125,27 @@ export default function Dashboard() {
           {weekChart.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={weekChart}>
-
                 <defs>
-                  <linearGradient
-                    id="rev"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="5%"
-                      stopColor="#6366f1"
-                      stopOpacity={0.3}
-                    />
-
-                    <stop
-                      offset="95%"
-                      stopColor="#6366f1"
-                      stopOpacity={0}
-                    />
+                  <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                   </linearGradient>
                 </defs>
 
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="#1f2937"
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
 
                 <XAxis
                   dataKey="label"
-                  tick={{
-                    fontSize: 11,
-                    fill: '#6b7280',
-                  }}
+                  tick={{ fontSize: 11, fill: '#6b7280' }}
                 />
 
                 <YAxis
-                  tickFormatter={(v) =>
-                    `${(v / 1000).toFixed(0)}k`
-                  }
-                  tick={{
-                    fontSize: 11,
-                    fill: '#6b7280',
-                  }}
+                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                  tick={{ fontSize: 11, fill: '#6b7280' }}
                 />
 
                 <Tooltip
-                  formatter={(v) => [
-                    formatRp(v),
-                    'Revenue',
-                  ]}
+                  formatter={(v) => [formatRp(v), 'Revenue']}
                   contentStyle={{
                     backgroundColor: '#111827',
                     border: '1px solid #374151',
@@ -207,7 +161,6 @@ export default function Dashboard() {
                   strokeWidth={2}
                   fill="url(#rev)"
                 />
-
               </AreaChart>
             </ResponsiveContainer>
           ) : (
@@ -215,27 +168,16 @@ export default function Dashboard() {
               Belum ada data transaksi minggu ini
             </div>
           )}
-
         </div>
 
-        {/* AI Insights */}
-
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-
           <div className="flex items-center gap-2 mb-4">
-
             <Brain className="w-4 h-4 text-indigo-400" />
-
-            <h3 className="text-sm font-semibold text-white">
-              AI Insights
-            </h3>
-
+            <h3 className="text-sm font-semibold text-white">AI Insights</h3>
             <div className="ml-auto w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-
           </div>
 
           <div className="space-y-3">
-
             {aiInsights.length === 0 && (
               <p className="text-gray-500 text-xs">
                 Tidak ada notifikasi baru.
@@ -247,29 +189,22 @@ export default function Dashboard() {
                 key={insight.id}
                 className="bg-gray-800/60 border border-gray-700 rounded-xl p-3"
               >
-
                 <p className="text-xs font-semibold text-indigo-300 mb-1">
                   {insight.title}
                 </p>
-
                 <p className="text-xs text-gray-400 line-clamp-2">
                   {insight.summary}
                 </p>
-
                 <div className="flex items-center gap-2 mt-2">
-
                   <span className="text-xs text-gray-500">
                     Skor:{' '}
                     <span className="text-green-400 font-semibold">
                       {insight.score}
                     </span>
                   </span>
-
                 </div>
-
               </div>
             ))}
-
           </div>
 
           <Link
@@ -279,44 +214,26 @@ export default function Dashboard() {
             Lihat Semua Insights
             <ArrowRight className="w-3 h-3" />
           </Link>
-
         </div>
-
       </div>
 
-      {/* ==========================================
-          TOP PRODUCTS + RECENT TRANSACTIONS
-      ========================================== */}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* Top Products */}
-
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-
           <div className="flex items-center justify-between mb-4">
-
             <h3 className="text-sm font-semibold text-white">
               🏆 Produk Terlaris Bulan Ini
             </h3>
-
             <Link
               to="/products"
               className="text-xs text-indigo-400 hover:text-indigo-300"
             >
               Lihat Semua
             </Link>
-
           </div>
 
           <div className="space-y-3">
-
             {topProducts.map((p, idx) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3"
-              >
-
+              <div key={p.id} className="flex items-center gap-3">
                 <span className="w-6 text-xs font-bold text-gray-500">
                   #{idx + 1}
                 </span>
@@ -329,138 +246,106 @@ export default function Dashboard() {
                   alt={p.name}
                   className="w-9 h-9 rounded-lg object-cover"
                   onError={(e) => {
-                    e.target.src =
+                    e.currentTarget.src =
                       'https://placehold.co/40x40/1f2937/6366f1?text=P';
                   }}
                 />
 
                 <div className="flex-1 min-w-0">
-
                   <p className="text-sm font-medium text-white truncate">
                     {p.name}
                   </p>
-
                   <p className="text-xs text-gray-400">
-                    {p.category_name}
+                    {p.category_name || '-'}
                   </p>
-
                 </div>
 
                 <div className="text-right">
-
                   <p className="text-sm font-semibold text-indigo-300">
                     {p.total_sold} terjual
                   </p>
-
                   <p className="text-xs text-gray-500">
                     {formatRp(p.total_revenue)}
                   </p>
-
                 </div>
-
               </div>
             ))}
 
+            {topProducts.length === 0 && (
+              <p className="text-xs text-gray-500">Belum ada penjualan.</p>
+            )}
           </div>
-
         </div>
 
-        {/* Recent Transactions */}
-
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-
           <div className="flex items-center justify-between mb-4">
-
             <h3 className="text-sm font-semibold text-white">
               🧾 Transaksi Terbaru
             </h3>
-
             <Link
               to="/transactions"
               className="text-xs text-indigo-400 hover:text-indigo-300"
             >
               Lihat Semua
             </Link>
-
           </div>
 
           <div className="space-y-3">
-
             {recentTransactions.map((tx) => (
               <div
                 key={tx.id}
                 className="flex items-center gap-3 py-2 border-b border-gray-800 last:border-0"
               >
-
                 <div className="w-8 h-8 bg-indigo-900/40 rounded-lg flex items-center justify-center">
-
                   <ShoppingCart className="w-4 h-4 text-indigo-400" />
-
                 </div>
 
                 <div className="flex-1 min-w-0">
-
                   <p className="text-xs font-semibold text-white">
                     {tx.invoice_no}
                   </p>
-
                   <p className="text-xs text-gray-400">
                     {tx.cashier_name || 'Kasir'}
                   </p>
-
                 </div>
 
                 <div className="text-right">
-
                   <p className="text-sm font-semibold text-green-400">
                     {formatRp(tx.final_amount)}
                   </p>
-
                   <p className="text-xs text-gray-500 capitalize">
                     {tx.payment_method}
                   </p>
-
                 </div>
-
               </div>
             ))}
 
+            {recentTransactions.length === 0 && (
+              <p className="text-xs text-gray-500">
+                Belum ada transaksi.
+              </p>
+            )}
           </div>
-
         </div>
-
       </div>
 
-      {/* ==========================================
-          QUICK ACTIONS
-      ========================================== */}
-
       <div className="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 border border-indigo-700/30 rounded-2xl p-5">
-
         <div className="flex items-center gap-2 mb-4">
-
           <Zap className="w-4 h-4 text-yellow-400" />
-
-          <h3 className="text-sm font-semibold text-white">
-            Aksi Cepat
-          </h3>
-
+          <h3 className="text-sm font-semibold text-white">Aksi Cepat</h3>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-
           {[
             {
               label: 'Prediksi Permintaan',
               to: '/ai/prediction',
-              color:
-                'from-purple-600 to-purple-700',
+              color: 'from-purple-600 to-purple-700',
             },
             {
               label: 'Rekomendasi Produk',
               to: '/ai/recommendation',
-              color:
-                'from-pink-600 to-pink-700',
+              color: 'from-pink-600 to-pink-700',
             },
           ].map((a) => (
             <Link
@@ -471,11 +356,8 @@ export default function Dashboard() {
               {a.label}
             </Link>
           ))}
-
         </div>
-
       </div>
-
     </div>
   );
 }
