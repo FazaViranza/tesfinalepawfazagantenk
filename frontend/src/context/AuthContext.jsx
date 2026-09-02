@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import api from '../api';
 
 const AuthContext = createContext(null);
@@ -8,23 +8,37 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem('umkm_token');
+      setUser(null);
+    };
+
+    window.addEventListener('umkm:unauthorized', handleUnauthorized);
+
     const token = localStorage.getItem('umkm_token');
 
-    if (token) {
-      api.get('/auth/me')
-        .then((res) => {
-          setUser(res.data);
-        })
-        .catch(() => {
-          localStorage.removeItem('umkm_token');
-          setUser(null);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
+    if (!token) {
       setLoading(false);
+      return () => {
+        window.removeEventListener('umkm:unauthorized', handleUnauthorized);
+      };
     }
+
+    api.get('/auth/me')
+      .then((res) => {
+        setUser(res?.data || null);
+      })
+      .catch(() => {
+        localStorage.removeItem('umkm_token');
+        setUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+
+    return () => {
+      window.removeEventListener('umkm:unauthorized', handleUnauthorized);
+    };
   }, []);
 
   const login = async (email, password) => {
@@ -33,8 +47,15 @@ export function AuthProvider({ children }) {
       password,
     });
 
-    localStorage.setItem('umkm_token', res.data.token);
-    setUser(res.data.user);
+    const token = res?.data?.token;
+    const loggedInUser = res?.data?.user;
+
+    if (!token || !loggedInUser?.role) {
+      throw new Error('Response login dari server tidak valid.');
+    }
+
+    localStorage.setItem('umkm_token', token);
+    setUser(loggedInUser);
 
     return res;
   };
@@ -45,14 +66,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
