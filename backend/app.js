@@ -18,9 +18,18 @@ const aiRoutes = require('./routes/ai.routes');
 const app = express();
 
 // Middleware
-app.use(cors({ origin: config.frontendUrl, credentials: true }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.disable('x-powered-by');
+
+app.use(cors({
+  origin: config.frontendUrl,
+  credentials: true,
+}));
+
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({
+  extended: false,
+  limit: '1mb',
+}));
 
 // Routes
 app.use('/health', healthRoutes);
@@ -34,7 +43,10 @@ app.use('/api/ai', aiRoutes);
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: `Route ${req.method} ${req.path} tidak ditemukan.` });
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.path} tidak ditemukan.`,
+  });
 });
 
 // Global error handler
