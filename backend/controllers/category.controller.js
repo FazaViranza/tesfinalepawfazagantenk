@@ -4,7 +4,21 @@ const {
   validateText,
 } = require('../utils/validation');
 
-const validateCategory = (body) => {
+const validateCategoryId = (value) => {
+  if (!/^\d+$/.test(String(value))) {
+    return 'ID kategori tidak valid.';
+  }
+
+  const id = Number(value);
+
+  if (!Number.isSafeInteger(id) || id < 1) {
+    return 'ID kategori tidak valid.';
+  }
+
+  return null;
+};
+
+const validateCategory = (body = {}) => {
   const { name, description, icon } = body;
 
   let error;
@@ -80,6 +94,15 @@ const create = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
+    const idError = validateCategoryId(req.params.id);
+
+    if (idError) {
+      return res.status(400).json({
+        success: false,
+        message: idError,
+      });
+    }
+
     const validationError = validateCategory(req.body);
 
     if (validationError) {
@@ -106,7 +129,7 @@ const update = async (req, res, next) => {
         name.trim(),
         description ? description.trim() : null,
         icon ? icon.trim() : 'Folder',
-        req.params.id,
+        Number(req.params.id),
       ]
     );
 
@@ -129,9 +152,18 @@ const update = async (req, res, next) => {
 
 const remove = async (req, res, next) => {
   try {
+    const idError = validateCategoryId(req.params.id);
+
+    if (idError) {
+      return res.status(400).json({
+        success: false,
+        message: idError,
+      });
+    }
+
     const result = await query(
       'DELETE FROM categories WHERE id=$1 RETURNING id',
-      [req.params.id]
+      [Number(req.params.id)]
     );
 
     if (!result.rows.length) {
