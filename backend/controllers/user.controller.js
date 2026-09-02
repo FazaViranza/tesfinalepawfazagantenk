@@ -1,5 +1,4 @@
 const bcrypt = require('bcryptjs');
-
 const { query } = require('../config/db');
 
 const {
@@ -7,11 +6,18 @@ const {
   validateEmail,
   validatePhone,
   validatePassword,
+  validateInteger,
 } = require('../utils/validation');
 
-// ===============================
-// GET ALL CASHIERS
-// ===============================
+const getId = (value, fieldName = 'ID pengguna') => {
+  const error = validateInteger(value, fieldName);
+  if (error) return { error };
+
+  const id = Number(value);
+  if (id < 1) return { error: `${fieldName} tidak valid.` };
+
+  return { id };
+};
 
 const getAllCashiers = async (req, res, next) => {
   try {
@@ -22,147 +28,79 @@ const getAllCashiers = async (req, res, next) => {
        ORDER BY created_at DESC`
     );
 
-    res.json({
-      success: true,
-      data: result.rows,
-    });
+    res.json({ success: true, data: result.rows });
   } catch (err) {
     next(err);
   }
 };
 
-// ===============================
-// GET CASHIER BY ID
-// ===============================
-
 const getCashierById = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const parsed = getId(req.params.id);
+    if (parsed.error) {
+      return res.status(400).json({ success: false, message: parsed.error });
+    }
 
     const result = await query(
       `SELECT id, name, email, phone, role, created_at
        FROM users
-       WHERE id = $1
-         AND role = 'cashier'`,
-      [id]
+       WHERE id = $1 AND role = 'cashier'`,
+      [parsed.id]
     );
 
-    if (result.rows.length === 0) {
+    if (!result.rows.length) {
       return res.status(404).json({
         success: false,
         message: 'Akun kasir tidak ditemukan.',
       });
     }
 
-    res.json({
-      success: true,
-      data: result.rows[0],
-    });
+    res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     next(err);
   }
 };
 
-// ===============================
-// CREATE CASHIER
-// ===============================
-
 const createCashier = async (req, res, next) => {
   try {
-    const {
-      name,
-      email,
-      password,
-      phone,
-    } = req.body;
+    const body = req.body || {};
+    const { name, email, password, phone } = body;
 
-    // ===============================
-    // VALIDATION
-    // ===============================
-
-    let error;
-
-    error = validateName(name);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
-      });
-    }
+    let error = validateName(name);
+    if (error) return res.status(400).json({ success: false, message: error });
 
     error = validateEmail(email);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
-      });
-    }
+    if (error) return res.status(400).json({ success: false, message: error });
 
     error = validatePhone(phone);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
-      });
-    }
+    if (error) return res.status(400).json({ success: false, message: error });
 
     error = validatePassword(password, true);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
-      });
-    }
+    if (error) return res.status(400).json({ success: false, message: error });
 
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = phone.trim();
 
-    // ===============================
-    // CHECK DUPLICATE EMAIL
-    // ===============================
-
     const existing = await query(
-      `SELECT id
-       FROM users
-       WHERE email = $1`,
+      'SELECT id FROM users WHERE email = $1',
       [cleanEmail]
     );
 
-    if (existing.rows.length > 0) {
-      return res.status(400).json({
+    if (existing.rows.length) {
+      return res.status(409).json({
         success: false,
         message: 'Email sudah digunakan.',
       });
     }
 
-    // ===============================
-    // HASH PASSWORD
-    // ===============================
-
-    const hashedPassword = await bcrypt.hash(
-      password,
-      10
-    );
-
-    // ===============================
-    // INSERT CASHIER
-    // ===============================
-    // Role selalu cashier.
-    // Tidak mengambil role dari client.
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await query(
-      `INSERT INTO users
-        (name, email, password, role, phone)
-       VALUES
-        ($1, $2, $3, 'cashier', $4)
+      `INSERT INTO users (name, email, password, role, phone)
+       VALUES ($1, $2, $3, 'cashier', $4)
        RETURNING id, name, email, role, phone, created_at`,
-      [
-        cleanName,
-        cleanEmail,
-        hashedPassword,
-        cleanPhone,
-      ]
+      [cleanName, cleanEmail, hashedPassword, cleanPhone]
     );
 
     res.status(201).json({
@@ -175,169 +113,79 @@ const createCashier = async (req, res, next) => {
   }
 };
 
-// ===============================
-// UPDATE CASHIER
-// ===============================
-
 const updateCashier = async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    const {
-      name,
-      email,
-      password,
-      phone,
-    } = req.body;
-
-    // ===============================
-    // VALIDATION
-    // ===============================
-
-    let error;
-
-    error = validateName(name);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
-      });
+    const parsed = getId(req.params.id);
+    if (parsed.error) {
+      return res.status(400).json({ success: false, message: parsed.error });
     }
+
+    const body = req.body || {};
+    const { name, email, password, phone } = body;
+
+    let error = validateName(name);
+    if (error) return res.status(400).json({ success: false, message: error });
 
     error = validateEmail(email);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
-      });
-    }
+    if (error) return res.status(400).json({ success: false, message: error });
 
     error = validatePhone(phone);
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
-      });
-    }
+    if (error) return res.status(400).json({ success: false, message: error });
 
-    // Password optional saat update.
-    // Kalau diisi, minimal 6 karakter.
-
-    if (
-      password !== undefined &&
-      password !== null &&
-      password !== ''
-    ) {
-      error = validatePassword(
-        password,
-        false
-      );
-
-      if (error) {
-        return res.status(400).json({
-          success: false,
-          message: error,
-        });
-      }
+    if (password !== undefined && password !== null && password !== '') {
+      error = validatePassword(password, false);
+      if (error) return res.status(400).json({ success: false, message: error });
     }
 
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = phone.trim();
 
-    // ===============================
-    // CHECK CASHIER EXISTS
-    // ===============================
-
     const existingUser = await query(
-      `SELECT id
-       FROM users
-       WHERE id = $1
-         AND role = 'cashier'`,
-      [id]
+      `SELECT id FROM users WHERE id = $1 AND role = 'cashier'`,
+      [parsed.id]
     );
 
-    if (existingUser.rows.length === 0) {
+    if (!existingUser.rows.length) {
       return res.status(404).json({
         success: false,
         message: 'Akun kasir tidak ditemukan.',
       });
     }
 
-    // ===============================
-    // CHECK DUPLICATE EMAIL
-    // ===============================
-
     const duplicateEmail = await query(
-      `SELECT id
-       FROM users
-       WHERE email = $1
-         AND id != $2`,
-      [
-        cleanEmail,
-        id,
-      ]
+      `SELECT id FROM users WHERE email = $1 AND id != $2`,
+      [cleanEmail, parsed.id]
     );
 
-    if (duplicateEmail.rows.length > 0) {
-      return res.status(400).json({
+    if (duplicateEmail.rows.length) {
+      return res.status(409).json({
         success: false,
-        message:
-          'Email sudah digunakan oleh pengguna lain.',
+        message: 'Email sudah digunakan oleh pengguna lain.',
       });
     }
 
-    // ===============================
-    // UPDATE
-    // ===============================
-
     let result;
 
-    if (
-      password !== undefined &&
-      password !== null &&
-      password !== ''
-    ) {
-      const hashedPassword =
-        await bcrypt.hash(
-          password,
-          10
-        );
+    if (password !== undefined && password !== null && password !== '') {
+      const hashedPassword = await bcrypt.hash(password, 10);
 
       result = await query(
         `UPDATE users
-         SET name = $1,
-             email = $2,
-             phone = $3,
-             password = $4,
+         SET name = $1, email = $2, phone = $3, password = $4,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5
-           AND role = 'cashier'
+         WHERE id = $5 AND role = 'cashier'
          RETURNING id, name, email, role, phone, created_at`,
-        [
-          cleanName,
-          cleanEmail,
-          cleanPhone,
-          hashedPassword,
-          id,
-        ]
+        [cleanName, cleanEmail, cleanPhone, hashedPassword, parsed.id]
       );
     } else {
       result = await query(
         `UPDATE users
-         SET name = $1,
-             email = $2,
-             phone = $3,
+         SET name = $1, email = $2, phone = $3,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $4
-           AND role = 'cashier'
+         WHERE id = $4 AND role = 'cashier'
          RETURNING id, name, email, role, phone, created_at`,
-        [
-          cleanName,
-          cleanEmail,
-          cleanPhone,
-          id,
-        ]
+        [cleanName, cleanEmail, cleanPhone, parsed.id]
       );
     }
 
@@ -351,23 +199,20 @@ const updateCashier = async (req, res, next) => {
   }
 };
 
-// ===============================
-// DELETE CASHIER
-// ===============================
-
 const deleteCashier = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const parsed = getId(req.params.id);
+    if (parsed.error) {
+      return res.status(400).json({ success: false, message: parsed.error });
+    }
 
     const existingUser = await query(
-      `SELECT id, name
-       FROM users
-       WHERE id = $1
-         AND role = 'cashier'`,
-      [id]
+      `SELECT id, name FROM users
+       WHERE id = $1 AND role = 'cashier'`,
+      [parsed.id]
     );
 
-    if (existingUser.rows.length === 0) {
+    if (!existingUser.rows.length) {
       return res.status(404).json({
         success: false,
         message: 'Akun kasir tidak ditemukan.',
@@ -376,15 +221,13 @@ const deleteCashier = async (req, res, next) => {
 
     await query(
       `DELETE FROM users
-       WHERE id = $1
-         AND role = 'cashier'`,
-      [id]
+       WHERE id = $1 AND role = 'cashier'`,
+      [parsed.id]
     );
 
     res.json({
       success: true,
-      message:
-        `Akun kasir "${existingUser.rows[0].name}" berhasil dihapus.`,
+      message: `Akun kasir "${existingUser.rows[0].name}" berhasil dihapus.`,
     });
   } catch (err) {
     next(err);
