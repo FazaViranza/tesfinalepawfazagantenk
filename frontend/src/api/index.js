@@ -4,6 +4,7 @@ const getToken = () => localStorage.getItem('umkm_token');
 
 const apiFetch = async (endpoint, options = {}) => {
   const token = getToken();
+
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -26,12 +27,28 @@ const apiFetch = async (endpoint, options = {}) => {
       window.dispatchEvent(new Event('umkm:unauthorized'));
     }
 
-    throw new Error(
+    const error = new Error(
       data?.message || `HTTP Error ${res.status}`
     );
+
+    // Keep an Axios-like response shape so existing pages
+    // can read err.response?.data?.message safely.
+    error.response = {
+      data,
+      status: res.status,
+      ok: res.ok,
+    };
+
+    throw error;
   }
 
-  return data;
+  // Existing frontend pages consume API results through res.data.
+  // Keep that contract consistent across GET/POST/PUT/DELETE.
+  return {
+    data,
+    status: res.status,
+    ok: res.ok,
+  };
 };
 
 export const api = {
@@ -39,7 +56,10 @@ export const api = {
     const cleanParams = params
       ? Object.fromEntries(
           Object.entries(params).filter(
-            ([, value]) => value !== undefined && value !== null && value !== ''
+            ([, value]) =>
+              value !== undefined &&
+              value !== null &&
+              value !== ''
           )
         )
       : {};
