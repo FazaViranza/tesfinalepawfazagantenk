@@ -4,6 +4,7 @@ const config = require('../config/env');
 const authenticate = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -11,9 +12,40 @@ const authenticate = (req, res, next) => {
       });
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, config.jwtSecret);
-    req.user = decoded;
+    const token = authHeader.slice(7).trim();
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Akses ditolak. Token autentikasi tidak ditemukan.',
+      });
+    }
+
+    const decoded = jwt.verify(token, config.jwtSecret, {
+      algorithms: ['HS256'],
+    });
+
+    if (!decoded || !Number.isSafeInteger(Number(decoded.id)) || Number(decoded.id) < 1) {
+      return res.status(401).json({
+        success: false,
+        message: 'Sesi login tidak valid.',
+      });
+    }
+
+    if (!['owner', 'cashier'].includes(decoded.role)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Sesi login tidak valid.',
+      });
+    }
+
+    req.user = {
+      id: Number(decoded.id),
+      name: decoded.name,
+      email: decoded.email,
+      role: decoded.role,
+    };
+
     next();
   } catch (err) {
     return res.status(401).json({
@@ -24,6 +56,8 @@ const authenticate = (req, res, next) => {
 };
 
 const authorize = (roles = []) => {
+  const allowedRoles = Array.isArray(roles) ? roles : [roles];
+
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -32,14 +66,7 @@ const authorize = (roles = []) => {
       });
     }
 
-    if (typeof roles === 'string') {
-      roles = [roles];
-    }
-
-    console.log('AUTH DEBUG:', req.user);
-    console.log('REQUIRED ROLE:', roles);
-
-    if (roles.length && !roles.includes(req.user.role)) {
+    if (allowedRoles.length && !allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Hak akses tidak mencukupi untuk melakukan aksi ini.',
