@@ -12,29 +12,15 @@ const {
   authorize,
 } = require('../middleware/auth.middleware');
 
-// Public catalog
-router.get('/', getAll);
+// Categories are internal application data.
+router.use(authenticate);
+
+// Owner + Cashier can read categories for the authenticated application.
+router.get('/', authorize(['owner', 'cashier']), getAll);
 
 // Owner-only management
-router.post(
-  '/',
-  authenticate,
-  authorize('owner'),
-  create
-);
-
-router.put(
-  '/:id',
-  authenticate,
-  authorize('owner'),
-  update
-);
-
-router.delete(
-  '/:id',
-  authenticate,
-  authorize('owner'),
-  remove
-);
+router.post('/', authorize('owner'), create);
+router.put('/:id', authorize('owner'), update);
+router.delete('/:id', authorize('owner'), remove);
 
 module.exports = router;
