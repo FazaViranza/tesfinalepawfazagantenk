@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 import Login from '../pages/Login';
-import Register from '../pages/Register';
 
 import Dashboard from '../pages/Dashboard';
 import Products from '../pages/Products';
@@ -17,11 +16,6 @@ import AIInsights from '../pages/AIInsights';
 import AIChat from '../pages/AIChat';
 
 import Layout from '../components/Layout';
-
-// Customer-facing pages
-// Kalau file Catalog belum ada, sementara gunakan placeholder route
-// dan nanti kita buat page-nya.
-import Home from '../pages/Home';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -52,7 +46,7 @@ function ProtectedRoute({ children, roles }) {
       return <Navigate to="/pos" replace />;
     }
 
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return children;
@@ -81,19 +75,17 @@ function AppRoutes() {
     <Routes>
 
       {/* =========================================
-          PUBLIC CUSTOMER
-      ========================================= */}
-
-      <Route path="/" element={<Home />} />
+          LANDING PAGE
+          ========================================= */}
 
       <Route
-        path="/catalog"
-        element={<Home />}
+        path="/"
+        element={<Navigate to="/login" replace />}
       />
 
       {/* =========================================
-          AUTH
-      ========================================= */}
+          LOGIN
+          ========================================= */}
 
       <Route
         path="/login"
@@ -104,18 +96,9 @@ function AppRoutes() {
         }
       />
 
-      <Route
-        path="/register"
-        element={
-          <PublicRoute>
-            <Register />
-          </PublicRoute>
-        }
-      />
-
       {/* =========================================
           AUTHENTICATED APPLICATION
-      ========================================= */}
+          ========================================= */}
 
       <Route
         path="/"
@@ -128,7 +111,7 @@ function AppRoutes() {
 
         {/* =====================================
             OWNER
-        ===================================== */}
+            ===================================== */}
 
         <Route
           path="dashboard"
@@ -153,6 +136,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute roles={['owner']}>
               <Categories />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="cashiers"
+          element={
+            <ProtectedRoute roles={['owner']}>
+              <Cashiers />
             </ProtectedRoute>
           }
         />
@@ -184,9 +176,18 @@ function AppRoutes() {
           }
         />
 
+        <Route
+          path="ai/chat"
+          element={
+            <ProtectedRoute roles={['owner']}>
+              <AIChat />
+            </ProtectedRoute>
+          }
+        />
+
         {/* =====================================
             OWNER + CASHIER
-        ===================================== */}
+            ===================================== */}
 
         <Route
           path="transactions"
@@ -199,7 +200,7 @@ function AppRoutes() {
 
         {/* =====================================
             CASHIER
-        ===================================== */}
+            ===================================== */}
 
         <Route
           path="pos"
@@ -213,24 +214,13 @@ function AppRoutes() {
       </Route>
 
       {/* =========================================
-          PUBLIC AI CHAT
-      ========================================= */}
-
-      <Route
-        path="/ai/chat"
-        element={<AIChat />}
-      />
-
-      {/* =========================================
           FALLBACK
-      ========================================= */}
+          ========================================= */}
 
       <Route
         path="*"
         element={<Navigate to="/" replace />}
       />
-
-      <Route path="/cashiers" element={<Cashiers />} />
 
     </Routes>
   );

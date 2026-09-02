@@ -11,6 +11,8 @@ import {
   Bot,
   X,
   Brain,
+  Users,
+  MessageCircle,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -57,6 +59,11 @@ export default function Sidebar({ open, onClose }) {
           icon: Tag,
           label: 'Kategori',
         },
+        {
+          to: '/cashiers',
+          icon: Users,
+          label: 'Manajemen Kasir',
+        },
       ],
     });
 
@@ -77,6 +84,11 @@ export default function Sidebar({ open, onClose }) {
           to: '/ai/insights',
           icon: BarChart3,
           label: 'Business Insights',
+        },
+        {
+          to: '/ai/chat',
+          icon: MessageCircle,
+          label: 'Business AI Chat',
         },
       ],
     });
@@ -121,9 +133,11 @@ export default function Sidebar({ open, onClose }) {
           w-64 bg-gray-900 border-r border-gray-800
           flex flex-col
           transform transition-transform duration-300
-          ${open
-            ? 'translate-x-0'
-            : '-translate-x-full md:translate-x-0'}
+          ${
+            open
+              ? 'translate-x-0'
+              : '-translate-x-full md:translate-x-0'
+          }
         `}
       >
 
@@ -153,6 +167,7 @@ export default function Sidebar({ open, onClose }) {
           >
             <X className="w-5 h-5" />
           </button>
+
         </div>
 
         {/* User role */}
@@ -162,7 +177,7 @@ export default function Sidebar({ open, onClose }) {
           </p>
 
           <p className="text-sm font-semibold text-white capitalize">
-            {user?.role}
+            {user?.role === 'owner' ? 'Owner' : 'Kasir'}
           </p>
         </div>
 
@@ -191,7 +206,6 @@ export default function Sidebar({ open, onClose }) {
                           px-3 py-2.5 rounded-lg
                           text-sm font-medium
                           transition-all
-
                           ${
                             isActive
                               ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
