@@ -147,6 +147,29 @@ const validateNumber = (
 };
 
 // ==========================================
+// VALIDATE PRICE
+// ==========================================
+
+const validatePrice = (
+  value,
+  fieldName = 'Harga'
+) => {
+  const error = validateNumber(value, fieldName);
+
+  if (error) {
+    return error;
+  }
+
+  const number = Number(value);
+
+  if (!Number.isSafeInteger(Math.round(number))) {
+    return `${fieldName} terlalu besar.`;
+  }
+
+  return null;
+};
+
+// ==========================================
 // VALIDATE INTEGER
 // ==========================================
 
@@ -233,6 +256,7 @@ module.exports = {
   validatePhone,
   validatePassword,
   validateNumber,
+  validatePrice,
   validateInteger,
   validateText,
   validateUrl,
