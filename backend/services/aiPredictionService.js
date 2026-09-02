@@ -2,38 +2,36 @@ const { query } = require('../config/db');
 
 /**
  * AI Demand Forecasting & Restock Recommendation Service
- * Menggunakan analisis deret waktu (Time-Series Moving Average & Trend Regression)
- * untuk memprediksi volume penjualan mendatang dan menghitung rekomendasi stok.
+ * Menggunakan Moving Average sederhana + Linear Regression untuk proyeksi.
  */
 class AIPredictionService {
-  /**
-   * Prediksi penjualan keseluruhan dan per-produk untuk N hari ke depan
-   * @param {number} forecastDays - Jumlah hari prediksi (default: 14 hari)
-   */
   static async getSalesForecast(forecastDays = 14) {
-    // 1. Ambil data penjualan harian 30 hari terakhir
+    const safeForecastDays = Number.isInteger(Number(forecastDays))
+      ? Math.min(90, Math.max(1, Number(forecastDays)))
+      : 14;
+
     const dailySalesSql = `
-      SELECT 
+      SELECT
         DATE(created_at) as sale_date,
         COUNT(id) as total_orders,
-        SUM(final_amount) as total_revenue,
-        SUM(total_amount - discount_amount) as net_sales
+        SUM(final_amount) as total_revenue
       FROM transactions
-      WHERE status = 'completed' AND created_at >= NOW() - INTERVAL '30 days'
+      WHERE status = 'completed'
+        AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY DATE(created_at)
       ORDER BY sale_date ASC;
     `;
+
     const dailySalesRes = await query(dailySalesSql);
-    const historicalData = dailySalesRes.rows.map(row => ({
-      date: row.sale_date.toISOString().split('T')[0],
-      orders: parseInt(row.total_orders, 10),
-      revenue: parseFloat(row.total_revenue || 0),
+    const historicalData = dailySalesRes.rows.map((row) => ({
+      date: new Date(row.sale_date).toISOString().split('T')[0],
+      orders: parseInt(row.total_orders, 10) || 0,
+      revenue: parseFloat(row.total_revenue || 0) || 0,
     }));
 
-    // 2. Hitung statistik & tren linier (Linear Regression: y = mx + c)
     let avgDailyRevenue = 0;
     let avgDailyOrders = 0;
-    let slope = 0; // Tren pertumbuhan harian
+    let slope = 0;
 
     if (historicalData.length > 0) {
       const n = historicalData.length;
@@ -42,9 +40,9 @@ class AIPredictionService {
       let sumXY = 0;
       let sumX2 = 0;
 
-      historicalData.forEach((d, idx) => {
-        const x = idx + 1;
-        const y = d.revenue;
+      historicalData.forEach((day, index) => {
+        const x = index + 1;
+        const y = day.revenue;
         sumX += x;
         sumY += y;
         sumXY += x * y;
@@ -52,39 +50,54 @@ class AIPredictionService {
       });
 
       avgDailyRevenue = sumY / n;
-      avgDailyOrders = historicalData.reduce((acc, d) => acc + d.orders, 0) / n;
-      
-      const denominator = (n * sumX2 - sumX * sumX);
+      avgDailyOrders = historicalData.reduce(
+        (total, day) => total + day.orders,
+        0
+      ) / n;
+
+      const denominator = n * sumX2 - sumX * sumX;
       if (denominator !== 0) {
         slope = (n * sumXY - sumX * sumY) / denominator;
       }
-    } else {
-      avgDailyRevenue = 250000;
-      avgDailyOrders = 10;
     }
 
-    // 3. Generate proyeksi harian ke depan
-    const lastHistoricalDate = historicalData.length > 0 
+    const hasHistoricalSales = historicalData.length > 0 && avgDailyRevenue > 0;
+    const lastHistoricalDate = hasHistoricalSales
       ? new Date(historicalData[historicalData.length - 1].date)
       : new Date();
 
     const forecastData = [];
     let predictedTotalRevenue = 0;
 
-    for (let i = 1; i <= forecastDays; i++) {
+    for (let i = 1; i <= safeForecastDays; i += 1) {
       const targetDate = new Date(lastHistoricalDate);
       targetDate.setDate(targetDate.getDate() + i);
 
-      const dayOfWeek = targetDate.getDay(); // 0 = Minggu, 6 = Sabtu
+      const dayOfWeek = targetDate.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      // Weekend multiplier boost (retail F&B biasanya naik 20-35% di akhir pekan)
       const weekendMultiplier = isWeekend ? 1.25 : 0.95;
 
-      // Base prediction dengan tren + variasi acak kecil realistis (+/- 5%)
-      const baseRev = Math.max(50000, avgDailyRevenue + (slope * (historicalData.length + i)));
-      const noise = 1 + (Math.sin(i * 1.5) * 0.05);
-      const predictedRevenue = Math.round(baseRev * weekendMultiplier * noise);
-      const predictedOrders = Math.max(1, Math.round(predictedRevenue / (avgDailyRevenue / Math.max(1, avgDailyOrders))));
+      let predictedRevenue = 0;
+      let predictedOrders = 0;
+
+      if (hasHistoricalSales) {
+        const trendValue = avgDailyRevenue + slope * (historicalData.length + i);
+        const baseRevenue = Math.max(0, trendValue);
+        const noise = 1 + Math.sin(i * 1.5) * 0.05;
+
+        predictedRevenue = Math.max(
+          0,
+          Math.round(baseRevenue * weekendMultiplier * noise)
+        );
+
+        const averageOrderValue = avgDailyOrders > 0
+          ? avgDailyRevenue / avgDailyOrders
+          : 0;
+
+        predictedOrders = averageOrderValue > 0
+          ? Math.max(0, Math.round(predictedRevenue / averageOrderValue))
+          : 0;
+      }
 
       predictedTotalRevenue += predictedRevenue;
 
@@ -93,13 +106,14 @@ class AIPredictionService {
         dayName: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][dayOfWeek],
         predictedRevenue,
         predictedOrders,
-        confidence: Math.min(95, Math.max(70, Math.round(92 - (i * 1.2)))), // Confidence menurun seiring jauhnya horizon
+        confidence: hasHistoricalSales
+          ? Math.min(95, Math.max(70, Math.round(92 - i * 1.2)))
+          : 0,
       });
     }
 
-    // 4. Analisis Prediksi per-Produk & Rekomendasi Restock
     const productSalesSql = `
-      SELECT 
+      SELECT
         p.id,
         p.name,
         p.sku,
@@ -116,10 +130,8 @@ class AIPredictionService {
         ), 0) as units_sold_30d,
         COUNT(DISTINCT t.id) as transaction_count
       FROM products p
-      LEFT JOIN categories c
-        ON p.category_id = c.id
-      LEFT JOIN transaction_details td
-        ON p.id = td.product_id
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN transaction_details td ON p.id = td.product_id
       LEFT JOIN transactions t
         ON td.transaction_id = t.id
         AND t.created_at >= NOW() - INTERVAL '30 days'
@@ -130,30 +142,32 @@ class AIPredictionService {
 
     const productSalesRes = await query(productSalesSql);
 
-    const productForecasts = productSalesRes.rows.map(prod => {
-      const currentStock = parseInt(prod.stock, 10);
-      const minStock = parseInt(prod.min_stock, 10);
-      const unitsSold30d = parseInt(prod.units_sold_30d, 10);
-      
-      // Rata-rata kecepatan penjualan per hari (Sales Velocity)
-      const dailyVelocity = unitsSold30d > 0 ? (unitsSold30d / 30) : 0.2;
-      const forecastDemandUnits = Math.round(dailyVelocity * forecastDays * 1.05); // 5% growth expectation
-      
-      // Sisa hari hingga stok habis (Days to Stockout)
-      const daysUntilStockout = dailyVelocity > 0 ? parseFloat((currentStock / dailyVelocity).toFixed(1)) : 999;
-      
-      // Hitung Reorder Point (Lead time asumsi 2 hari + safety stock)
+    const productForecasts = productSalesRes.rows.map((prod) => {
+      const currentStock = Math.max(0, parseInt(prod.stock, 10) || 0);
+      const minStock = Math.max(0, parseInt(prod.min_stock, 10) || 0);
+      const unitsSold30d = Math.max(0, parseInt(prod.units_sold_30d, 10) || 0);
+      const price = Math.max(0, parseFloat(prod.price) || 0);
+      const costPrice = Math.max(0, parseFloat(prod.cost_price) || 0);
+
+      const dailyVelocity = unitsSold30d / 30;
+      const forecastDemandUnits = Math.round(dailyVelocity * safeForecastDays * 1.05);
+      const daysUntilStockout = dailyVelocity > 0
+        ? parseFloat((currentStock / dailyVelocity).toFixed(1))
+        : null;
+
       const leadTimeDays = 2;
       const reorderPoint = Math.ceil(dailyVelocity * leadTimeDays) + minStock;
-      
-      // Kebutuhan restock
-      const isUrgent = currentStock <= minStock || daysUntilStockout <= 3;
-      const recommendedRestock = isUrgent ? Math.max(10, Math.ceil(dailyVelocity * 14) - currentStock) : 0;
+      const isUrgent = currentStock <= minStock || (
+        dailyVelocity > 0 && currentStock / dailyVelocity <= 3
+      );
+      const recommendedRestock = isUrgent
+        ? Math.max(0, Math.ceil(dailyVelocity * 14) - currentStock)
+        : 0;
 
       let riskLevel = 'Aman';
       if (currentStock === 0) riskLevel = 'Habis';
       else if (isUrgent) riskLevel = 'Kritis';
-      else if (daysUntilStockout <= 7) riskLevel = 'Perhatian';
+      else if (dailyVelocity > 0 && currentStock / dailyVelocity <= 7) riskLevel = 'Perhatian';
 
       return {
         productId: prod.id,
@@ -162,26 +176,35 @@ class AIPredictionService {
         category: prod.category_name,
         currentStock,
         minStock,
-        price: parseFloat(prod.price),
-        costPrice: parseFloat(prod.cost_price),
+        price,
+        costPrice,
         unitsSold30d,
         dailyVelocity: parseFloat(dailyVelocity.toFixed(2)),
         forecastDemandUnits,
-        daysUntilStockout: daysUntilStockout > 100 ? '> 90 hari' : `${daysUntilStockout} hari`,
+        daysUntilStockout: daysUntilStockout === null
+          ? 'Tidak ada penjualan 30 hari'
+          : daysUntilStockout > 90
+            ? '> 90 hari'
+            : `${daysUntilStockout} hari`,
         reorderPoint,
         recommendedRestock,
         riskLevel,
-        estimatedRestockCost: recommendedRestock * parseFloat(prod.cost_price),
+        estimatedRestockCost: recommendedRestock * costPrice,
       };
     });
 
     return {
       summary: {
-        forecastDays,
+        forecastDays: safeForecastDays,
+        hasHistoricalSales,
         predictedTotalRevenue,
         avgDailyRevenue: Math.round(avgDailyRevenue),
-        growthTrendPct: parseFloat(((slope / Math.max(1, avgDailyRevenue)) * 100).toFixed(2)),
-        criticalStockCount: productForecasts.filter(p => p.riskLevel === 'Kritis' || p.riskLevel === 'Habis').length,
+        growthTrendPct: avgDailyRevenue > 0
+          ? parseFloat(((slope / avgDailyRevenue) * 100).toFixed(2))
+          : 0,
+        criticalStockCount: productForecasts.filter(
+          (product) => product.riskLevel === 'Kritis' || product.riskLevel === 'Habis'
+        ).length,
       },
       historicalData,
       forecastData,
