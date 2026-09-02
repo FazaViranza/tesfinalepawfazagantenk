@@ -26,7 +26,8 @@ export function AuthProvider({ children }) {
 
     api.get('/auth/me')
       .then((res) => {
-        setUser(res?.data || null);
+        const userData = res?.data?.data;
+        setUser(userData || null);
       })
       .catch(() => {
         localStorage.removeItem('umkm_token');
@@ -47,8 +48,9 @@ export function AuthProvider({ children }) {
       password,
     });
 
-    const token = res?.data?.token;
-    const loggedInUser = res?.data?.user;
+    const authData = res?.data?.data;
+    const token = authData?.token;
+    const loggedInUser = authData?.user;
 
     if (!token || !loggedInUser?.role) {
       throw new Error('Response login dari server tidak valid.');
