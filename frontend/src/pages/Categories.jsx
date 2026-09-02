@@ -4,6 +4,8 @@ import Modal from '../components/Modal';
 import { Plus, Edit2, Trash2, Tag } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
+import { validateText } from '../utils/validation';
+
 export default function Categories() {
   const { user } = useAuth();
   const isOwner = user?.role === 'owner';
@@ -34,11 +36,13 @@ export default function Categories() {
 
   const openCreate = () => {
     setEditItem(null);
+
     setForm({
       name: '',
       description: '',
       icon: 'Folder',
     });
+
     setError('');
     setModalOpen(true);
   };
@@ -47,7 +51,7 @@ export default function Categories() {
     setEditItem(category);
 
     setForm({
-      name: category.name,
+      name: category.name || '',
       description: category.description || '',
       icon: category.icon || 'Folder',
     });
@@ -56,26 +60,58 @@ export default function Categories() {
     setModalOpen(true);
   };
 
+  const validateForm = () => {
+    const nameError = validateText(form.name, 'Nama kategori', 100);
+
+    if (nameError) {
+      return nameError;
+    }
+
+    if (form.description && form.description.trim().length > 500) {
+      return 'Deskripsi maksimal 500 karakter.';
+    }
+
+    if (form.icon && form.icon.trim().length > 50) {
+      return 'Icon maksimal 50 karakter.';
+    }
+
+    return '';
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
+
+    const validationError = validateForm();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
     setSaving(true);
     setError('');
 
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      icon: form.icon.trim() || 'Folder',
+    };
+
     try {
       if (editItem) {
-        await api.put(
-          `/categories/${editItem.id}`,
-          form
-        );
+        await api.put(`/categories/${editItem.id}`, payload);
       } else {
-        await api.post('/categories', form);
+        await api.post('/categories', payload);
       }
 
       setModalOpen(false);
       fetchData();
     } catch (err) {
-      setError(err.message);
+      setError(
+        err.response?.data?.message ||
+        err.message ||
+        'Gagal menyimpan kategori.'
+      );
     } finally {
       setSaving(false);
     }
@@ -90,7 +126,11 @@ export default function Categories() {
       await api.delete(`/categories/${category.id}`);
       fetchData();
     } catch (err) {
-      alert(err.message);
+      alert(
+        err.response?.data?.message ||
+        err.message ||
+        'Gagal menghapus kategori.'
+      );
     }
   };
 
@@ -126,7 +166,6 @@ export default function Categories() {
 
             {/* Category Info */}
             <div className="flex-1 min-w-0">
-
               <p className="font-semibold text-white">
                 {category.name}
               </p>
@@ -134,7 +173,6 @@ export default function Categories() {
               <p className="text-xs text-gray-400 mt-0.5 truncate">
                 {category.description || 'Tidak ada deskripsi'}
               </p>
-
             </div>
 
             {/* Owner Actions */}
@@ -175,11 +213,7 @@ export default function Categories() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={
-          editItem
-            ? 'Edit Kategori'
-            : 'Tambah Kategori'
-        }
+        title={editItem ? 'Edit Kategori' : 'Tambah Kategori'}
       >
 
         <form
@@ -202,6 +236,7 @@ export default function Categories() {
 
             <input
               required
+              maxLength={100}
               value={form.name}
               onChange={(e) =>
                 setForm((f) => ({
@@ -223,6 +258,7 @@ export default function Categories() {
 
             <textarea
               rows={2}
+              maxLength={500}
               value={form.description}
               onChange={(e) =>
                 setForm((f) => ({
