@@ -14,49 +14,18 @@ const {
   authorize,
 } = require('../middleware/auth.middleware');
 
+router.use(authenticate);
+
 // Owner-only AI analytics
-router.get(
-  '/prediction',
-  authenticate,
-  authorize('owner'),
-  getPrediction
-);
+router.get('/prediction', authorize('owner'), getPrediction);
+router.get('/recommendations', authorize('owner'), getRecommendations);
+router.get('/insights', authorize('owner'), getBusinessInsights);
+router.get('/insights/saved', authorize('owner'), getSavedInsights);
 
-router.get(
-  '/recommendations',
-  authenticate,
-  authorize('owner'),
-  getRecommendations
-);
+// Owner + Cashier: used by POS for product recommendations
+router.post('/cross-sell', authorize(['owner', 'cashier']), getCrossSell);
 
-router.get(
-  '/insights',
-  authenticate,
-  authorize('owner'),
-  getBusinessInsights
-);
-
-router.get(
-  '/insights/saved',
-  authenticate,
-  authorize('owner'),
-  getSavedInsights
-);
-
-// Owner + Cashier
-router.post(
-  '/cross-sell',
-  authenticate,
-  authorize(['owner', 'cashier']),
-  getCrossSell
-);
-
-
-router.post(
-  '/chat',
-  authenticate,
-  authorize('owner'),
-  chatQuery
-);
+// Owner-only business AI chatbot
+router.post('/chat', authorize('owner'), chatQuery);
 
 module.exports = router;
