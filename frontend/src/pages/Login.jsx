@@ -28,7 +28,7 @@ export default function Login() {
         form.password
       );
 
-      const loggedInUser = res?.data?.data?.user;
+      const loggedInUser = res?.data?.user;
 
       if (!loggedInUser?.role) {
         throw new Error('Response login dari server tidak valid.');
@@ -53,14 +53,12 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
-
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mb-4 shadow-lg shadow-indigo-500/30">
             <Brain className="w-8 h-8 text-white" />
@@ -76,7 +74,6 @@ export default function Login() {
         </div>
 
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
-
           <h2 className="text-xl font-semibold text-white mb-1">
             Masuk ke Akun
           </h2>
