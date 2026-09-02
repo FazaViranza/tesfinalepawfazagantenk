@@ -26,8 +26,7 @@ export function AuthProvider({ children }) {
 
     api.get('/auth/me')
       .then((res) => {
-        const userData = res?.data?.data;
-        setUser(userData || null);
+        setUser(res?.data || null);
       })
       .catch(() => {
         localStorage.removeItem('umkm_token');
@@ -48,7 +47,7 @@ export function AuthProvider({ children }) {
       password,
     });
 
-    const authData = res?.data?.data;
+    const authData = res?.data;
     const token = authData?.token;
     const loggedInUser = authData?.user;
 
