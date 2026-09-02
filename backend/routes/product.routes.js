@@ -19,25 +19,8 @@ router.get('/', authorize(['owner', 'cashier']), getAll);
 router.get('/:id', authorize(['owner', 'cashier']), getById);
 
 // Owner-only management
-router.post(
-  '/',
-  authenticate,
-  authorize('owner'),
-  create
-);
-
-router.put(
-  '/:id',
-  authenticate,
-  authorize('owner'),
-  update
-);
-
-router.delete(
-  '/:id',
-  authenticate,
-  authorize('owner'),
-  remove
-);
+router.post('/', authorize('owner'), create);
+router.put('/:id', authorize('owner'), update);
+router.delete('/:id', authorize('owner'), remove);
 
 module.exports = router;
