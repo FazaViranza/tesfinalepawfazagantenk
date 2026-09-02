@@ -148,6 +148,14 @@ export default function AIChat() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-7.5rem)] bg-gray-900 border border-gray-800 rounded-2xl shadow-xl overflow-hidden">
+<<<<<<< Updated upstream
+=======
+
+      {/* ======================================
+          CHAT HEADER
+      ====================================== */
+
+>>>>>>> Stashed changes
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900/80 backdrop-blur">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-600/30">
@@ -182,6 +190,13 @@ export default function AIChat() {
         </button>
       </div>
 
+<<<<<<< Updated upstream
+=======
+      {/* ======================================
+          MESSAGES
+      ====================================== */
+
+>>>>>>> Stashed changes
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
         {messages.map((message) => {
           const isUser = message.sender === 'user';
@@ -256,6 +271,13 @@ export default function AIChat() {
         <div ref={messagesEndRef} />
       </div>
 
+<<<<<<< Updated upstream
+=======
+      {/* ======================================
+          QUICK PROMPTS
+      ====================================== */
+
+>>>>>>> Stashed changes
       {messages.length <= 2 && (
         <div className="px-6 py-2 bg-gray-950/40 border-t border-gray-800/60 flex items-center gap-2 overflow-x-auto">
           <span className="text-xs text-gray-400 font-medium flex-shrink-0">
@@ -276,6 +298,13 @@ export default function AIChat() {
         </div>
       )}
 
+<<<<<<< Updated upstream
+=======
+      {/* ======================================
+          INPUT
+      ====================================== */
+
+>>>>>>> Stashed changes
       <div className="p-4 border-t border-gray-800 bg-gray-900/90">
         <form
           onSubmit={(event) => {
