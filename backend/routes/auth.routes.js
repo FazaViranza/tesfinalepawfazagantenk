@@ -1,7 +1,6 @@
 const router = require('express').Router();
 
 const {
-  register,
   login,
   getMe,
 } = require('../controllers/auth.controller');
@@ -11,7 +10,6 @@ const {
 } = require('../middleware/auth.middleware');
 
 // Public
-router.post('/register', register);
 router.post('/login', login);
 
 // Protected

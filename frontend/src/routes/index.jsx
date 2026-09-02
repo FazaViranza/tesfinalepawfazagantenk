@@ -9,6 +9,7 @@ import Products from '../pages/Products';
 import Categories from '../pages/Categories';
 import Transactions from '../pages/Transactions';
 import POS from '../pages/POS';
+import Cashiers from '../pages/Cashiers';
 
 import AIPrediction from '../pages/AIPrediction';
 import AIRecommendation from '../pages/AIRecommendation';
@@ -228,6 +229,8 @@ function AppRoutes() {
         path="*"
         element={<Navigate to="/" replace />}
       />
+
+      <Route path="/cashiers" element={<Cashiers />} />
 
     </Routes>
   );

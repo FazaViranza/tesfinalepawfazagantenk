@@ -8,6 +8,7 @@ const { errorHandler } = require('./middleware/error.middleware');
 // Routes
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
+const userRoutes = require('./routes/user.routes');
 const productRoutes = require('./routes/product.routes');
 const categoryRoutes = require('./routes/category.routes');
 const transactionRoutes = require('./routes/transaction.routes');
@@ -24,6 +25,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/transactions', transactionRoutes);
