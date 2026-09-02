@@ -52,6 +52,11 @@ router.post(
 );
 
 // Customer chatbot — public
-router.post('/chat', chatQuery);
+router.post(
+  '/chat',
+  authenticate,
+  authorize('owner'),
+  chatQuery
+);
 
 module.exports = router;

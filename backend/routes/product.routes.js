@@ -13,9 +13,10 @@ const {
   authorize,
 } = require('../middleware/auth.middleware');
 
-// Public catalog
-router.get('/', getAll);
-router.get('/:id', getById);
+router.use(authenticate);
+
+router.get('/', authorize(['owner', 'cashier']), getAll);
+router.get('/:id', authorize(['owner', 'cashier']), getById);
 
 // Owner-only management
 router.post(
