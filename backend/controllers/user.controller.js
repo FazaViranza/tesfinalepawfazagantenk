@@ -1,13 +1,13 @@
 const bcrypt = require('bcryptjs');
+
 const { query } = require('../config/db');
 
-// ===============================
-// VALIDATION HELPERS
-// ===============================
-
-const nameRegex = /^[A-Za-zÀ-ÿ\s]+$/;
-const phoneRegex = /^\d+$/;
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const {
+  validateName,
+  validateEmail,
+  validatePhone,
+  validatePassword,
+} = require('../utils/validation');
 
 // ===============================
 // GET ALL CASHIERS
@@ -69,13 +69,48 @@ const getCashierById = async (req, res, next) => {
 
 const createCashier = async (req, res, next) => {
   try {
-    const { name, email, password, phone } = req.body;
+    const {
+      name,
+      email,
+      password,
+      phone,
+    } = req.body;
 
-    // Required fields
-    if (!name || !email || !password || !phone) {
+    // ===============================
+    // VALIDATION
+    // ===============================
+
+    let error;
+
+    error = validateName(name);
+    if (error) {
       return res.status(400).json({
         success: false,
-        message: 'Nama, email, password, dan nomor HP wajib diisi.',
+        message: error,
+      });
+    }
+
+    error = validateEmail(email);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    error = validatePhone(phone);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    error = validatePassword(password, true);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
       });
     }
 
@@ -83,41 +118,14 @@ const createCashier = async (req, res, next) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = phone.trim();
 
-    // Name validation
-    if (!nameRegex.test(cleanName)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nama hanya boleh berisi huruf dan spasi.',
-      });
-    }
+    // ===============================
+    // CHECK DUPLICATE EMAIL
+    // ===============================
 
-    // Email validation
-    if (!emailRegex.test(cleanEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Format email tidak valid.',
-      });
-    }
-
-    // Phone validation
-    if (!phoneRegex.test(cleanPhone)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nomor HP hanya boleh berisi angka.',
-      });
-    }
-
-    // Password validation
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password minimal 6 karakter.',
-      });
-    }
-
-    // Check email
     const existing = await query(
-      'SELECT id FROM users WHERE email = $1',
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
       [cleanEmail]
     );
 
@@ -128,11 +136,21 @@ const createCashier = async (req, res, next) => {
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // ===============================
+    // HASH PASSWORD
+    // ===============================
 
-    // IMPORTANT:
+    const hashedPassword = await bcrypt.hash(
+      password,
+      10
+    );
+
+    // ===============================
+    // INSERT CASHIER
+    // ===============================
     // Role selalu cashier.
+    // Tidak mengambil role dari client.
+
     const result = await query(
       `INSERT INTO users
         (name, email, password, role, phone)
@@ -164,44 +182,73 @@ const createCashier = async (req, res, next) => {
 const updateCashier = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, email, password, phone } = req.body;
 
-    if (!name || !email || !phone) {
+    const {
+      name,
+      email,
+      password,
+      phone,
+    } = req.body;
+
+    // ===============================
+    // VALIDATION
+    // ===============================
+
+    let error;
+
+    error = validateName(name);
+    if (error) {
       return res.status(400).json({
         success: false,
-        message: 'Nama, email, dan nomor HP wajib diisi.',
+        message: error,
       });
+    }
+
+    error = validateEmail(email);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    error = validatePhone(phone);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error,
+      });
+    }
+
+    // Password optional saat update.
+    // Kalau diisi, minimal 6 karakter.
+
+    if (
+      password !== undefined &&
+      password !== null &&
+      password !== ''
+    ) {
+      error = validatePassword(
+        password,
+        false
+      );
+
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error,
+        });
+      }
     }
 
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = phone.trim();
 
-    // Name validation
-    if (!nameRegex.test(cleanName)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nama hanya boleh berisi huruf dan spasi.',
-      });
-    }
+    // ===============================
+    // CHECK CASHIER EXISTS
+    // ===============================
 
-    // Email validation
-    if (!emailRegex.test(cleanEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Format email tidak valid.',
-      });
-    }
-
-    // Phone validation
-    if (!phoneRegex.test(cleanPhone)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nomor HP hanya boleh berisi angka.',
-      });
-    }
-
-    // Check cashier exists
     const existingUser = await query(
       `SELECT id
        FROM users
@@ -217,34 +264,45 @@ const updateCashier = async (req, res, next) => {
       });
     }
 
-    // Check duplicate email
+    // ===============================
+    // CHECK DUPLICATE EMAIL
+    // ===============================
+
     const duplicateEmail = await query(
       `SELECT id
        FROM users
        WHERE email = $1
          AND id != $2`,
-      [cleanEmail, id]
+      [
+        cleanEmail,
+        id,
+      ]
     );
 
     if (duplicateEmail.rows.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Email sudah digunakan oleh pengguna lain.',
+        message:
+          'Email sudah digunakan oleh pengguna lain.',
       });
     }
 
+    // ===============================
+    // UPDATE
+    // ===============================
+
     let result;
 
-    // Password hanya diubah jika diisi
-    if (password && password.trim() !== '') {
-      if (password.length < 6) {
-        return res.status(400).json({
-          success: false,
-          message: 'Password minimal 6 karakter.',
-        });
-      }
-
-      const hashedPassword = await bcrypt.hash(password, 10);
+    if (
+      password !== undefined &&
+      password !== null &&
+      password !== ''
+    ) {
+      const hashedPassword =
+        await bcrypt.hash(
+          password,
+          10
+        );
 
       result = await query(
         `UPDATE users
@@ -325,7 +383,8 @@ const deleteCashier = async (req, res, next) => {
 
     res.json({
       success: true,
-      message: `Akun kasir "${existingUser.rows[0].name}" berhasil dihapus.`,
+      message:
+        `Akun kasir "${existingUser.rows[0].name}" berhasil dihapus.`,
     });
   } catch (err) {
     next(err);
