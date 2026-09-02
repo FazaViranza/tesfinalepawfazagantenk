@@ -1,5 +1,64 @@
 const { query, getClient } = require('../config/db');
 
+const MAX_PAGE_SIZE = 100;
+
+const allowedPaymentMethods = [
+  'cash',
+  'qris',
+  'transfer',
+  'debit',
+];
+
+const parseStrictInteger = (value) => {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) ? value : null;
+  }
+
+  if (typeof value !== 'string' || !/^\d+$/.test(value.trim())) {
+    return null;
+  }
+
+  const number = Number(value.trim());
+
+  return Number.isSafeInteger(number) ? number : null;
+};
+
+const parseStrictNumber = (value) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== 'string' || value.trim() === '') {
+    return null;
+  }
+
+  if (!/^\d+(\.\d+)?$/.test(value.trim())) {
+    return null;
+  }
+
+  const number = Number(value.trim());
+
+  return Number.isFinite(number) ? number : null;
+};
+
+const validateTextLength = (value, maxLength) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    return 'Format teks tidak valid.';
+  }
+
+  const text = value.trim();
+
+  if (text.length > maxLength) {
+    return `Teks maksimal ${maxLength} karakter.`;
+  }
+
+  return null;
+};
+
 const getAll = async (req, res, next) => {
   try {
     const {
@@ -10,25 +69,73 @@ const getAll = async (req, res, next) => {
       payment_method,
     } = req.query;
 
-    const userId = req.user.id;
-    const userRole = req.user.role;
+    const pageNumber = parseStrictInteger(page);
+    const limitNumber = parseStrictInteger(limit);
 
-    const pageNumber = parseInt(page, 10);
-    const limitNumber = parseInt(limit, 10);
+    if (
+      pageNumber === null ||
+      pageNumber < 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nomor halaman tidak valid.',
+      });
+    }
+
+    if (
+      limitNumber === null ||
+      limitNumber < 1 ||
+      limitNumber > MAX_PAGE_SIZE
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Limit harus antara 1-${MAX_PAGE_SIZE}.`,
+      });
+    }
+
+    if (typeof search !== 'string' || search.length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parameter pencarian tidak valid.',
+      });
+    }
+
+    if (
+      status !== undefined &&
+      status !== 'completed'
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status transaksi tidak valid.',
+      });
+    }
+
+    if (
+      payment_method !== undefined &&
+      !allowedPaymentMethods.includes(payment_method)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Metode pembayaran tidak valid.',
+      });
+    }
+
     const offset = (pageNumber - 1) * limitNumber;
 
     const params = [];
     let whereClause = 'WHERE 1=1';
 
-    // Cashier hanya boleh melihat transaksi miliknya sendiri.
-    // Owner boleh melihat seluruh transaksi.
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    // Cashier hanya boleh melihat transaksinya sendiri.
     if (userRole === 'cashier') {
       params.push(userId);
       whereClause += ` AND t.user_id = $${params.length}`;
     }
 
-    if (search) {
-      params.push(`%${search}%`);
+    if (search.trim()) {
+      params.push(`%${search.trim()}%`);
       whereClause += ` AND t.invoice_no ILIKE $${params.length}`;
     }
 
@@ -42,7 +149,6 @@ const getAll = async (req, res, next) => {
       whereClause += ` AND t.payment_method = $${params.length}`;
     }
 
-    // Count transaksi
     const countRes = await query(
       `
       SELECT COUNT(*)
@@ -52,10 +158,13 @@ const getAll = async (req, res, next) => {
       params
     );
 
-    const total = parseInt(countRes.rows[0].count, 10);
+    const total = Number(countRes.rows[0].count);
 
-    // Ambil transaksi
-    const dataParams = [...params, limitNumber, offset];
+    const dataParams = [
+      ...params,
+      limitNumber,
+      offset,
+    ];
 
     const txRes = await query(
       `
@@ -80,7 +189,9 @@ const getAll = async (req, res, next) => {
         total,
         page: pageNumber,
         limit: limitNumber,
-        totalPages: Math.ceil(total / limitNumber),
+        totalPages: Math.ceil(
+          total / limitNumber
+        ),
       },
     });
   } catch (err) {
@@ -90,14 +201,24 @@ const getAll = async (req, res, next) => {
 
 const getById = async (req, res, next) => {
   try {
+    const transactionId = parseStrictInteger(
+      req.params.id
+    );
+
+    if (transactionId === null || transactionId < 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID transaksi tidak valid.',
+      });
+    }
+
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    const params = [req.params.id];
+    const params = [transactionId];
 
     let ownershipClause = '';
 
-    // Cashier hanya boleh membuka transaksi miliknya sendiri.
     if (userRole === 'cashier') {
       params.push(userId);
       ownershipClause = `AND t.user_id = $${params.length}`;
@@ -135,7 +256,7 @@ const getById = async (req, res, next) => {
       WHERE td.transaction_id = $1
       ORDER BY td.id ASC
       `,
-      [req.params.id]
+      [transactionId]
     );
 
     res.json({
@@ -164,8 +285,26 @@ const create = async (req, res, next) => {
       notes,
     } = req.body;
 
-    // User otomatis diambil dari JWT.
     const userId = req.user.id;
+
+    // ==========================================
+    // VALIDASI NOTES
+    // ==========================================
+
+    const notesError = validateTextLength(
+      notes,
+      500
+    );
+
+    if (notesError) {
+      await client.query('ROLLBACK');
+      client.release();
+
+      return res.status(400).json({
+        success: false,
+        message: notesError,
+      });
+    }
 
     // ==========================================
     // VALIDASI CART
@@ -181,18 +320,90 @@ const create = async (req, res, next) => {
       });
     }
 
+    if (items.length > 100) {
+      await client.query('ROLLBACK');
+      client.release();
+
+      return res.status(400).json({
+        success: false,
+        message: 'Jumlah item transaksi terlalu banyak.',
+      });
+    }
+
+    // ==========================================
+    // NORMALISASI CART
+    // ==========================================
+
+    const itemMap = new Map();
+
+    for (const item of items) {
+      if (
+        !item ||
+        typeof item !== 'object'
+      ) {
+        await client.query('ROLLBACK');
+        client.release();
+
+        return res.status(400).json({
+          success: false,
+          message: 'Format item transaksi tidak valid.',
+        });
+      }
+
+      const productId = parseStrictInteger(
+        item.product_id
+      );
+
+      const quantity = parseStrictInteger(
+        item.quantity
+      );
+
+      if (
+        productId === null ||
+        productId < 1 ||
+        quantity === null ||
+        quantity < 1
+      ) {
+        await client.query('ROLLBACK');
+        client.release();
+
+        return res.status(400).json({
+          success: false,
+          message: 'Data produk atau quantity tidak valid.',
+        });
+      }
+
+      const currentQuantity =
+        itemMap.get(productId) || 0;
+
+      const combinedQuantity =
+        currentQuantity + quantity;
+
+      if (combinedQuantity > 100000) {
+        await client.query('ROLLBACK');
+        client.release();
+
+        return res.status(400).json({
+          success: false,
+          message: 'Quantity produk terlalu besar.',
+        });
+      }
+
+      itemMap.set(
+        productId,
+        combinedQuantity
+      );
+    }
+
     // ==========================================
     // VALIDASI PAYMENT METHOD
     // ==========================================
 
-    const allowedPaymentMethods = [
-      'cash',
-      'qris',
-      'transfer',
-      'debit',
-    ];
-
-    if (!allowedPaymentMethods.includes(payment_method)) {
+    if (
+      !allowedPaymentMethods.includes(
+        payment_method
+      )
+    ) {
       await client.query('ROLLBACK');
       client.release();
 
@@ -203,25 +414,16 @@ const create = async (req, res, next) => {
     }
 
     // ==========================================
-    // VALIDASI PRODUK & HITUNG TOTAL
+    // LOCK PRODUCTS + HITUNG TOTAL
     // ==========================================
 
     let totalAmount = 0;
     const itemsData = [];
 
-    for (const item of items) {
-      const productId = parseInt(item.product_id, 10);
-      const quantity = parseInt(item.quantity, 10);
-
-      if (!Number.isInteger(productId) || !Number.isInteger(quantity) || quantity <= 0) {
-        await client.query('ROLLBACK');
-        client.release();
-
-        return res.status(400).json({
-          success: false,
-          message: 'Data produk atau quantity tidak valid.',
-        });
-      }
+    for (const [
+      productId,
+      quantity,
+    ] of itemMap.entries()) {
 
       const prodRes = await client.query(
         `
@@ -245,7 +447,33 @@ const create = async (req, res, next) => {
 
       const product = prodRes.rows[0];
 
-      if (product.stock < quantity) {
+      const stock = parseStrictInteger(
+        product.stock
+      );
+
+      const unitPrice = parseStrictNumber(
+        product.price
+      );
+
+      const costPrice = parseStrictNumber(
+        product.cost_price
+      );
+
+      if (
+        stock === null ||
+        unitPrice === null ||
+        costPrice === null
+      ) {
+        await client.query('ROLLBACK');
+        client.release();
+
+        return res.status(500).json({
+          success: false,
+          message: 'Data produk di database tidak valid.',
+        });
+      }
+
+      if (stock < quantity) {
         await client.query('ROLLBACK');
         client.release();
 
@@ -253,15 +481,34 @@ const create = async (req, res, next) => {
           success: false,
           message:
             `Stok ${product.name} tidak mencukupi ` +
-            `(sisa: ${product.stock}).`,
+            `(sisa: ${stock}).`,
         });
       }
 
-      const unitPrice = parseFloat(product.price);
-      const costPrice = parseFloat(product.cost_price);
-      const subtotal = unitPrice * quantity;
+      const subtotal =
+        unitPrice * quantity;
+
+      if (!Number.isFinite(subtotal)) {
+        await client.query('ROLLBACK');
+        client.release();
+
+        return res.status(400).json({
+          success: false,
+          message: 'Nilai transaksi tidak valid.',
+        });
+      }
 
       totalAmount += subtotal;
+
+      if (!Number.isFinite(totalAmount)) {
+        await client.query('ROLLBACK');
+        client.release();
+
+        return res.status(400).json({
+          success: false,
+          message: 'Total transaksi terlalu besar.',
+        });
+      }
 
       itemsData.push({
         productId,
@@ -277,10 +524,11 @@ const create = async (req, res, next) => {
     // DISCOUNT
     // ==========================================
 
-    const discount = parseFloat(discount_amount) || 0;
+    const discount =
+      parseStrictNumber(discount_amount);
 
     if (
-      Number.isNaN(discount) ||
+      discount === null ||
       discount < 0 ||
       discount > totalAmount
     ) {
@@ -293,21 +541,32 @@ const create = async (req, res, next) => {
       });
     }
 
-    const finalAmount = totalAmount - discount;
+    const finalAmount =
+      totalAmount - discount;
 
     // ==========================================
     // PAYMENT
     // ==========================================
 
-    const paid =
-      paid_amount === undefined ||
-      paid_amount === null ||
-      paid_amount === ''
-        ? finalAmount
-        : parseFloat(paid_amount);
+    let paid;
 
     if (
-      Number.isNaN(paid) ||
+      payment_method !== 'cash' &&
+      (
+        paid_amount === undefined ||
+        paid_amount === null ||
+        paid_amount === ''
+      )
+    ) {
+      paid = finalAmount;
+    } else {
+      paid = parseStrictNumber(
+        paid_amount
+      );
+    }
+
+    if (
+      paid === null ||
       paid < finalAmount
     ) {
       await client.query('ROLLBACK');
@@ -319,11 +578,26 @@ const create = async (req, res, next) => {
       });
     }
 
-    const change = paid - finalAmount;
+    const change =
+      paid - finalAmount;
 
     // ==========================================
-    // GENERATE INVOICE
+    // INVOICE LOCK
     // ==========================================
+    // Mengunci pembuatan nomor invoice
+    // dalam transaksi agar request bersamaan
+    // tidak mengambil sequence yang sama.
+
+    await client.query(
+      `
+      SELECT pg_advisory_xact_lock(
+        hashtext(
+          'umkm_ai_invoice_' ||
+          CURRENT_DATE::text
+        )
+      )
+      `
+    );
 
     const now = new Date();
 
@@ -340,10 +614,9 @@ const create = async (req, res, next) => {
       `
     );
 
-    const seqNum =
-      String(
-        parseInt(countRes.rows[0].count, 10) + 1
-      ).padStart(4, '0');
+    const seqNum = String(
+      Number(countRes.rows[0].count) + 1
+    ).padStart(4, '0');
 
     const invoiceNo =
       `INV-${dateStr}-${seqNum}`;
@@ -384,11 +657,14 @@ const create = async (req, res, next) => {
         change,
         payment_method,
         'completed',
-        notes || null,
+        notes
+          ? notes.trim()
+          : null,
       ]
     );
 
-    const newTx = txRes.rows[0];
+    const newTx =
+      txRes.rows[0];
 
     // ==========================================
     // INSERT DETAILS + UPDATE STOCK
